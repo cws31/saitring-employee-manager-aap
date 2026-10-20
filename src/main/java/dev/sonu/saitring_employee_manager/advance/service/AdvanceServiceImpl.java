@@ -184,7 +184,7 @@ public class AdvanceServiceImpl implements AdvanceService {
                         .setScale(2, RoundingMode.HALF_UP);
 
                 BigDecimal openingBal = openingBalanceMap.getOrDefault(emp.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-                BigDecimal monthlyTotal = openingBal.add(monthlyDisbursed).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal monthlyTotal = monthlyDisbursed.subtract(openingBal).setScale(2, RoundingMode.HALF_UP);
 
                 BigDecimal runningBalance = runningBalanceMap.getOrDefault(
                         emp.getId(), BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)

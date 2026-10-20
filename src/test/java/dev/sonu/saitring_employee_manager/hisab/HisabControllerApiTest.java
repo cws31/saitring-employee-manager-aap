@@ -451,28 +451,28 @@ class HisabControllerApiTest {
         }
 
         // 7. Verify October Hisab Table:
-        // openingBalance = 1000.00 (from Sept carryForward)
+        // openingBalance = 1000.00 (from Sept carryForward credit)
         // monthlyAdvance = 6000.00 (2000 + 3000 + 1000)
-        // totalAdvance = 7000.00 (1000 + 6000)
+        // totalAdvance = 5000.00 (6000 - 1000)
         // totalEarnings = 12000.00
-        // finalMoney = 5000.00 (12000 - 7000)
+        // finalMoney = 7000.00 (12000 - 5000)
         mockMvc.perform(get("/api/v1/hisab?month=2026-10")
                         .header("Authorization", "Bearer " + jwtTokenOwner1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.month", is("2026-10")))
                 .andExpect(jsonPath("$.employees[0].openingBalance", is(1000.00)))
                 .andExpect(jsonPath("$.employees[0].monthlyAdvance", is(6000.00)))
-                .andExpect(jsonPath("$.employees[0].totalAdvance", is(7000.00)))
+                .andExpect(jsonPath("$.employees[0].totalAdvance", is(5000.00)))
                 .andExpect(jsonPath("$.employees[0].totalEarnings", is(12000.00)))
-                .andExpect(jsonPath("$.employees[0].finalMoney", is(5000.00)))
+                .andExpect(jsonPath("$.employees[0].finalMoney", is(7000.00)))
                 .andExpect(jsonPath("$.employees[0].status", is("RUNNING")));
 
-        // 8. Verify Advance Register for October also reflects opening balance 1000.00 and monthly total 7000.00
+        // 8. Verify Advance Register for October also reflects opening balance 1000.00 and monthly total 5000.00
         mockMvc.perform(get("/api/v1/advances/register?month=2026-10")
                         .header("Authorization", "Bearer " + jwtTokenOwner1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.employees[0].openingBalance", is(1000.00)))
-                .andExpect(jsonPath("$.employees[0].monthlyTotal", is(7000.00)));
+                .andExpect(jsonPath("$.employees[0].monthlyTotal", is(5000.00)));
     }
 
     @Test
@@ -500,14 +500,15 @@ class HisabControllerApiTest {
             markAttendance(jwtTokenOwner1, empId, LocalDate.of(2026, 10, d), AttendanceStatus.PRESENT, null);
         }
         disburseAdvance(jwtTokenOwner1, empId, new BigDecimal("6000.00"), LocalDate.of(2026, 10, 15), "Oct adv");
-        // Running hisab check: opening=1000, totalAdv=7000, final=5000
+        // Running hisab check: opening=1000 credit, totalAdv=6000-1000=5000, final=12000-5000=7000
         mockMvc.perform(get("/api/v1/hisab?month=2026-10")
                         .header("Authorization", "Bearer " + jwtTokenOwner1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.employees[0].openingBalance", is(1000.00)))
-                .andExpect(jsonPath("$.employees[0].totalAdvance", is(7000.00)))
-                .andExpect(jsonPath("$.employees[0].finalMoney", is(5000.00)));
-        // Settle Oct: earnings=12000, totalAdv=7000, final=5000. Owner pays 4000 -> carryForward = 1000.
+                .andExpect(jsonPath("$.employees[0].monthlyAdvance", is(6000.00)))
+                .andExpect(jsonPath("$.employees[0].totalAdvance", is(5000.00)))
+                .andExpect(jsonPath("$.employees[0].finalMoney", is(7000.00)));
+        // Settle Oct: earnings=12000, totalAdv=5000, final=7000. Owner pays 4000 -> carryForward = 3000.
         SettleHisabRequest settleOct = new SettleHisabRequest(empId, "2026-10", PaymentMode.UPI, new BigDecimal("4000.00"), "Oct clearance");
         mockMvc.perform(post("/api/v1/hisab/settle")
                         .header("Authorization", "Bearer " + jwtTokenOwner1)
@@ -515,51 +516,52 @@ class HisabControllerApiTest {
                         .content(objectMapper.writeValueAsString(settleOct)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.settlementAmount", is(4000.00)))
-                .andExpect(jsonPath("$.carryForward", is(1000.00)));
+                .andExpect(jsonPath("$.carryForward", is(3000.00)));
 
         // --- MONTH 3: November 2026 ---
         for (int d = 1; d <= 20; d++) {
             markAttendance(jwtTokenOwner1, empId, LocalDate.of(2026, 11, d), AttendanceStatus.PRESENT, null);
         }
         disburseAdvance(jwtTokenOwner1, empId, new BigDecimal("3000.00"), LocalDate.of(2026, 11, 10), "Nov adv");
-        // Running hisab check: opening=1000, monthAdv=3000, totalAdv=4000, earnings=12000, final=8000
+        // Running hisab check: opening=3000 credit, monthAdv=3000, totalAdv=3000-3000=0, earnings=12000, final=12000
         mockMvc.perform(get("/api/v1/hisab?month=2026-11")
                         .header("Authorization", "Bearer " + jwtTokenOwner1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.employees[0].openingBalance", is(1000.00)))
-                .andExpect(jsonPath("$.employees[0].totalAdvance", is(4000.00)))
-                .andExpect(jsonPath("$.employees[0].finalMoney", is(8000.00)));
-        // Settle Nov: final=8000. Owner gives 9500 cash (1500 excess!) -> carryForward = -1500.
-        SettleHisabRequest settleNov = new SettleHisabRequest(empId, "2026-11", PaymentMode.CASH, new BigDecimal("9500.00"), "Nov excess clearance");
+                .andExpect(jsonPath("$.employees[0].openingBalance", is(3000.00)))
+                .andExpect(jsonPath("$.employees[0].monthlyAdvance", is(3000.00)))
+                .andExpect(jsonPath("$.employees[0].totalAdvance", is(0.00)))
+                .andExpect(jsonPath("$.employees[0].finalMoney", is(12000.00)));
+        // Settle Nov: final=12000. Owner gives 14000 cash (2000 excess!) -> carryForward = -2000.
+        SettleHisabRequest settleNov = new SettleHisabRequest(empId, "2026-11", PaymentMode.CASH, new BigDecimal("14000.00"), "Nov excess clearance");
         mockMvc.perform(post("/api/v1/hisab/settle")
                         .header("Authorization", "Bearer " + jwtTokenOwner1)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(settleNov)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.settlementAmount", is(9500.00)))
-                .andExpect(jsonPath("$.carryForward", is(-1500.00)));
+                .andExpect(jsonPath("$.settlementAmount", is(14000.00)))
+                .andExpect(jsonPath("$.carryForward", is(-2000.00)));
 
         // --- MONTH 4: December 2026 ---
         for (int d = 1; d <= 20; d++) {
             markAttendance(jwtTokenOwner1, empId, LocalDate.of(2026, 12, d), AttendanceStatus.PRESENT, null);
         }
         disburseAdvance(jwtTokenOwner1, empId, new BigDecimal("5000.00"), LocalDate.of(2026, 12, 10), "Dec adv");
-        // Running hisab check: opening=-1500, monthAdv=5000 -> totalAdv = -1500 + 5000 = 3500. final = 12000 - 3500 = 8500.
+        // Running hisab check: opening=-2000 (overdue), monthAdv=5000 -> totalAdv = 5000 - (-2000) = 7000. final = 12000 - 7000 = 5000.
         mockMvc.perform(get("/api/v1/hisab?month=2026-12")
                         .header("Authorization", "Bearer " + jwtTokenOwner1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.employees[0].openingBalance", is(-1500.00)))
+                .andExpect(jsonPath("$.employees[0].openingBalance", is(-2000.00)))
                 .andExpect(jsonPath("$.employees[0].monthlyAdvance", is(5000.00)))
-                .andExpect(jsonPath("$.employees[0].totalAdvance", is(3500.00)))
-                .andExpect(jsonPath("$.employees[0].finalMoney", is(8500.00)));
-        // Settle Dec with exact 8500 -> carryForward = 0.00
-        SettleHisabRequest settleDec = new SettleHisabRequest(empId, "2026-12", PaymentMode.BANK_TRANSFER, new BigDecimal("8500.00"), "Dec full clearance");
+                .andExpect(jsonPath("$.employees[0].totalAdvance", is(7000.00)))
+                .andExpect(jsonPath("$.employees[0].finalMoney", is(5000.00)));
+        // Settle Dec with exact 5000 -> carryForward = 0.00
+        SettleHisabRequest settleDec = new SettleHisabRequest(empId, "2026-12", PaymentMode.BANK_TRANSFER, new BigDecimal("5000.00"), "Dec full clearance");
         mockMvc.perform(post("/api/v1/hisab/settle")
                         .header("Authorization", "Bearer " + jwtTokenOwner1)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(settleDec)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.settlementAmount", is(8500.00)))
+                .andExpect(jsonPath("$.settlementAmount", is(5000.00)))
                 .andExpect(jsonPath("$.carryForward", is(0.00)));
 
         // --- MONTH 5: January 2027 ---

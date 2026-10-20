@@ -149,7 +149,7 @@ public class HisabServiceImpl implements HisabService {
                     row.setRate(settled.getDailyRate());
                     row.setTotalEarnings(settled.getTotalEarnings());
                     row.setOpeningBalance(settled.getOpeningBalance());
-                    row.setMonthlyAdvance(settled.getTotalAdvance().subtract(settled.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP));
+                    row.setMonthlyAdvance(settled.getTotalAdvance().add(settled.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP));
                     row.setTotalAdvance(settled.getTotalAdvance());
                     row.setFinalMoney(settled.getFinalMoney());
                     row.setSettlementAmount(settled.getSettlementAmount());
@@ -174,7 +174,7 @@ public class HisabServiceImpl implements HisabService {
                             .setScale(2, RoundingMode.HALF_UP);
 
                     BigDecimal openingBal = openingBalanceMap.getOrDefault(emp.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-                    BigDecimal totalAdv = openingBal.add(monthAdv).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal totalAdv = monthAdv.subtract(openingBal).setScale(2, RoundingMode.HALF_UP);
                     BigDecimal finalMoney = earnings.subtract(totalAdv).setScale(2, RoundingMode.HALF_UP);
 
                     row.setFullDays(full);
@@ -333,7 +333,7 @@ public class HisabServiceImpl implements HisabService {
         }
         advanceRepository.saveAll(advances);
 
-        BigDecimal totalAdvance = openingBalance.add(monthAdvance).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalAdvance = monthAdvance.subtract(openingBalance).setScale(2, RoundingMode.HALF_UP);
         BigDecimal finalMoney = earnings.subtract(totalAdvance).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal settlementAmount = request.getSettlementAmount() != null

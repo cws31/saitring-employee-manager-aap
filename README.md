@@ -248,8 +248,8 @@ Run the entire test suite via:
 ```bash
 mvn test
 ```
-**Results: 98 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
-- [`HisabServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabServiceTest.java) (12 Unit Tests: earnings, advances, final money calculation, joining date filter, historical wage rate lookup, partial settlement clearance, carry-forward opening balance, settled status snapshot, settlement flow, advance closure)
+**Results: 99 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
+- [`HisabServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabServiceTest.java) (13 Unit Tests: earnings, advances, final money calculation, joining date filter, historical wage rate lookup, partial settlement clearance, credit deduction carry-forward opening balance, negative overdue carry-forward advance addition, settled status snapshot, settlement flow, advance closure)
 - [`HisabControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabControllerApiTest.java) (8 End-to-end API, Multi-Tenancy Isolation, Pagination, Monthly Wage Rate Versioning, Settlement Clearance & Indefinite Multi-Month Cyclic Carry-Forward Propagation Tests)
 - [`AdvanceServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/advance/AdvanceServiceTest.java) (10 Unit Tests: joining date rule, running balance, paginated register, summaries)
 - [`AdvanceControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/advance/AdvanceControllerApiTest.java) (6 End-to-end API, Multi-Tenancy & Register Integration Tests)
