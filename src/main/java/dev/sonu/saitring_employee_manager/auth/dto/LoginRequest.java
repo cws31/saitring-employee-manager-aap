@@ -5,10 +5,6 @@ import org.springframework.util.StringUtils;
 
 public class LoginRequest {
 
-    /**
-     * Can be either email or mobile phone number.
-     * Alternatively, client can populate 'email' or 'phoneNumber' directly.
-     */
     private String identifier;
     private String email;
     private String phoneNumber;
