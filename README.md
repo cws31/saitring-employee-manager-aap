@@ -12,20 +12,26 @@ The codebase strictly follows a clean modular layered architecture (`Presentatio
 ```
 dev.sonu.saitring_employee_manager/
 ├── auth/                      # Authentication & Dynamic 2FA Module
-│   ├── controller/            # AuthController (REST Presentation)
-│   ├── dto/                   # Request/Response Data Transfer Objects
+│   ├── controller/            # AuthController (REST Endpoints)
+│   ├── dto/                   # RegisterRequest, LoginRequest, VerifyOtpRequest, AuthResponse, etc.
 │   └── service/               # AuthService, OtpService, RedisOtpStorageService
 ├── owner/                     # Tenant Domain Module
 │   ├── controller/            # OwnerController (Profile Management)
 │   ├── dto/                   # OwnerResponse, UpdateOwnerProfileRequest
-│   ├── entity/                # Owner JPA Entity, Enums
+│   ├── entity/                # Owner JPA Entity, OwnerStatus, OwnerRole
 │   ├── repository/            # OwnerRepository
 │   └── service/               # OwnerService & Implementation
-├── common/                    # Shared Cross-Cutting Module
+├── employee/                  # Multi-Tenant Employee Management Module
+│   ├── controller/            # EmployeeController (CRUD, List, Block/Unblock)
+│   ├── dto/                   # CreateEmployeeRequest, UpdateEmployeeRequest, EmployeeResponse
+│   ├── entity/                # Employee JPA Entity, EmployeeStatus
+│   ├── repository/            # EmployeeRepository (Tenant-scoped queries)
+│   └── service/               # EmployeeService & Implementation
+├── common/                    # Shared Cross-Cutting Infrastructure
 │   ├── config/                # SecurityConfig, OpenApiConfig, RedisConfig
 │   ├── exception/             # GlobalExceptionHandler, Custom AppException hierarchy
 │   ├── notification/          # Brevo (Email OTP) & Twilio (SMS OTP)
-│   └── storage/               # Supabase Storage (Logo upload & deletion)
+│   └── storage/               # Supabase Storage (Logo upload & cleanup)
 └── security/                  # Spring Security 6 & JJWT 0.12 Integration
     ├── JwtTokenProvider       # Token generation, claims, signing
     ├── JwtAuthenticationFilter# Stateless request filtering
@@ -33,102 +39,84 @@ dev.sonu.saitring_employee_manager/
     └── CustomUserDetailsService
 ```
 
-### Multi-Tenancy Architecture
-- Each registered business owner acts as a distinct **tenant** (`owners.id`).
-- Future modules (`employee`, `attendance`, `advances`, `monthly_hisab`) will be packaged into their own distinct domain folders (e.g. `dev.sonu.saitring_employee_manager.employee`), referencing `owner_id` for strict multi-tenant row-level data isolation.
+---
+
+## Multi-Tenancy Isolation Standards
+
+- **Tenant Boundary**: Every operation requires authentication. The tenant identifier (`ownerId`) is derived securely from the authenticated JWT security context (`@AuthenticationPrincipal OwnerPrincipal principal`), **never** from request body parameters or path parameters.
+- **Data Protection**: If an owner attempts to view, update, delete, block, or unblock an employee belonging to another owner, the system returns `404 Not Found` (rather than 403) to prevent tenant enumeration.
+- **Tenant-Scoped Uniqueness**: Mobile numbers are unique **per owner tenant** (`UNIQUE(owner_id, mobile_number)`). Two different business owners can employ workers who share the same mobile number without conflict.
 
 ---
 
 ## Database Engineering & Schema (Flyway)
 
-Flyway migration script: [`V1__create_owners.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V1__create_owners.sql)
+### Flyway Migrations
+1. [`V1__create_owners.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V1__create_owners.sql): Creates `owners` tenant table with authentication indexes.
+2. [`V2__create_employees.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V2__create_employees.sql): Creates `employees` table with foreign key to `owners(id) ON DELETE CASCADE` and tenant-scoped composite indexes.
 
-### Table Schema: `owners`
+### Table Schema: `employees`
 | Column | Type | Constraints / Description |
 |---|---|---|
 | `id` | `BIGINT AUTO_INCREMENT` | Primary Key |
-| `owner_name` | `VARCHAR(100)` | Owner's full name |
-| `organization_name`| `VARCHAR(150)` | Saitring business name |
-| `email` | `VARCHAR(100)` | Unique Tenant Email |
-| `phone_number` | `VARCHAR(20)` | Unique Mobile Number |
-| `password_hash` | `VARCHAR(255)` | BCrypt hashed password |
-| `address` | `TEXT` | Physical business address |
-| `logo_url` | `VARCHAR(500)` | Supabase public image URL (Optional) |
-| `status` | `VARCHAR(30)` | `ACTIVE`, `INACTIVE`, `SUSPENDED` |
-| `role` | `VARCHAR(30)` | `ROLE_OWNER` |
-| `created_at` | `TIMESTAMP` | UTC Creation timestamp |
-| `updated_at` | `TIMESTAMP` | UTC Last update timestamp |
+| `owner_id` | `BIGINT` | Foreign Key to `owners(id)` |
+| `employee_name` | `VARCHAR(100)` | Full employee/worker name |
+| `mobile_number` | `VARCHAR(20)` | Employee contact number |
+| `daily_rate` | `DECIMAL(10, 2)` | Agreed daily wage/rate (rate/day) |
+| `joining_date` | `DATE` | Date employee joined the business (entered by owner) |
+| `status` | `VARCHAR(20)` | `ACTIVE`, `BLOCKED` (default: `ACTIVE`) |
+| `created_at` | `TIMESTAMP` | Record creation timestamp |
+| `updated_at` | `TIMESTAMP` | Last updated timestamp |
 
-### Performance Optimization Indexes
-- **`uk_owners_email`**: Unique index on `email` for $O(1)$ authentication lookup.
-- **`uk_owners_phone_number`**: Unique index on `phone_number` for $O(1)$ phone authentication lookup.
-- **`idx_owners_created_at_id`**: Composite index on `(created_at, id)` for stable ordered pagination.
-- **`idx_owners_status_created_at_id`**: Composite index on `(status, created_at, id)` for status-filtered queries.
-
----
-
-## Dynamic 2FA Authentication Flow
-
-1. **Owner Registration**:
-   - Accepts owner details and optional organization logo (via `multipart/form-data` or `application/json`).
-   - If a logo is provided, it is securely uploaded to **Supabase Storage**.
-2. **Login (Step 1)**:
-   - Client sends credentials (`identifier` + `password`).
-   - If logged in via **Email** -> Generates 6-digit OTP -> Sent via **Brevo** to registered email.
-   - If logged in via **Mobile Number** -> Generates 6-digit OTP -> Sent via **Twilio** to registered mobile phone.
-   - Challenge stored in **Redis** with a 5-minute TTL, attempt limit, and replay protection.
-3. **Verify OTP (Step 2)**:
-   - Client submits `challengeToken` and the 6-digit `otp`.
-   - Upon verification, challenge is invalidated immediately.
-   - Issues **JWT Bearer Token** with owner tenant claims.
-4. **Resend OTP**:
-   - Allows resending OTP with an enforced 30-second cooldown protection.
+### Indexes
+- `uk_employees_owner_mobile`: Unique index on `(owner_id, mobile_number)`
+- `idx_employees_owner_created_id`: Composite index on `(owner_id, created_at, id)` for stable pagination
+- `idx_employees_owner_status`: Composite index on `(owner_id, status)` for status filtering
+- `idx_employees_owner_name`: Composite index on `(owner_id, employee_name)` for search
 
 ---
 
 ## API Endpoints Reference
 
-### Authentication Endpoints (Public)
+### 1. Authentication (Public)
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/v1/auth/register` | Register new owner tenant (supports Multipart or JSON) |
 | `POST` | `/api/v1/auth/login` | Initiate credentials verification and dynamic 2FA dispatch |
 | `POST` | `/api/v1/auth/verify-otp` | Verify OTP code and obtain JWT Bearer Token |
-| `POST` | `/api/v1/auth/resend-otp` | Resend fresh OTP with rate limit cooldown |
+| `POST` | `/api/v1/auth/resend-otp` | Resend fresh OTP with cooldown |
 
-### Owner Profile Endpoints (Requires `Authorization: Bearer <token>`)
+### 2. Owner Profile (Bearer JWT Required)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/owners/profile` | Retrieve profile of authenticated owner |
 | `PUT` | `/api/v1/owners/profile` | Update profile details and upload new organization logo |
 
+### 3. Employee Management (Bearer JWT Required)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/employees` | Create employee (`employeeName`, `mobileNumber`, `dailyRate`, `joiningDate`) |
+| `GET` | `/api/v1/employees/{id}` | Get employee details by ID (tenant-scoped) |
+| `GET` | `/api/v1/employees` | List & search employees (paginated, status filter, name/phone search) |
+| `PUT` | `/api/v1/employees/{id}` | Update employee details |
+| `DELETE` | `/api/v1/employees/{id}` | Delete employee |
+| `PATCH` | `/api/v1/employees/{id}/block` | Block employee (disallows new attendance & advances) |
+| `PATCH` | `/api/v1/employees/{id}/unblock` | Restore employee status to `ACTIVE` |
+
 ### Documentation & Actuator
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`
-- **Health Check**: `http://localhost:8080/actuator/health`
 
 ---
 
-## External Services Configuration
+## Testing & Verification
 
-Environment variables configured in `.env` or application runtime:
-- **Brevo**: `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`
-- **Twilio**: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
-- **Supabase Storage**: `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_BUCKET`
-- **Database & Redis**: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `UPSTASH_REDIS_URL`
-
-*(When running locally or during tests without active external provider keys, the system gracefully logs simulated dispatches without crashing).*
-
----
-
-## Testing Verification
-
-The module has comprehensive multi-tiered testing:
-- **Unit Tests**: [`AuthServiceTest`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/AuthServiceTest.java), [`OtpServiceTest`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/OtpServiceTest.java), [`OwnerServiceTest`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/owner/OwnerServiceTest.java), [`JwtTokenProviderTest`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/security/JwtTokenProviderTest.java)
-- **Integration & API Tests**: [`AuthControllerApiTest`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/AuthControllerApiTest.java)
-
-Run all tests via:
+Run the entire test suite via:
 ```bash
 mvn clean test
 ```
-Result: **24 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
+**Results: 42 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
+- [`EmployeeServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/employee/EmployeeServiceTest.java) (12 Unit Tests)
+- [`EmployeeControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/employee/EmployeeControllerApiTest.java) (4 End-to-end API & Multi-Tenant Isolation Tests)
+- [`AuthControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/AuthControllerApiTest.java) (7 Auth & Swagger Multipart Tests)
+- [`AuthServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/AuthServiceTest.java), [`OtpServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/auth/OtpServiceTest.java), [`OwnerServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/owner/OwnerServiceTest.java), [`JwtTokenProviderTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/security/JwtTokenProviderTest.java)

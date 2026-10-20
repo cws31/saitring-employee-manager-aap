@@ -260,6 +260,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
+    @ExceptionHandler({org.springframework.dao.InvalidDataAccessApiUsageException.class, IllegalArgumentException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidQueryParameter(
+            Exception ex,
+            HttpServletRequest request) {
+
+        log.warn("Invalid query parameter on URI [{}]: {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse body = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                "Invalid query or sorting parameter: " + ex.getMessage(),
+                request.getRequestURI());
+
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(
             Exception ex,
