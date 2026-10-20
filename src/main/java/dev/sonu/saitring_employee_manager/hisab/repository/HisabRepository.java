@@ -33,4 +33,25 @@ public interface HisabRepository extends JpaRepository<MonthlyHisab, Long> {
     );
 
     boolean existsByOwnerIdAndEmployeeIdAndMonth(Long ownerId, Long employeeId, String month);
+
+    @Query("SELECT h FROM MonthlyHisab h " +
+           "WHERE h.owner.id = :ownerId AND h.employee.id = :employeeId " +
+           "AND h.month < :month AND h.status = 'SETTLED' " +
+           "ORDER BY h.month DESC")
+    List<MonthlyHisab> findPriorSettledHisab(
+            @Param("ownerId") Long ownerId,
+            @Param("employeeId") Long employeeId,
+            @Param("month") String month,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM MonthlyHisab h " +
+           "WHERE h.owner.id = :ownerId AND h.employee.id IN :employeeIds " +
+           "AND h.month < :month AND h.status = 'SETTLED' " +
+           "ORDER BY h.employee.id ASC, h.month DESC")
+    List<MonthlyHisab> findPriorSettledHisabsForEmployees(
+            @Param("ownerId") Long ownerId,
+            @Param("employeeIds") Collection<Long> employeeIds,
+            @Param("month") String month
+    );
 }

@@ -76,6 +76,7 @@ dev.sonu.saitring_employee_manager/
 4. [`V4__create_advances.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V4__create_advances.sql): Creates `advances` table with foreign keys to owners and employees (`ON DELETE CASCADE`), positive amount constraint, and running advance tracking indexes.
 5. [`V5__create_hisab.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V5__create_hisab.sql): Creates `monthly_hisab` table with foreign keys, unique constraint on `(owner_id, employee_id, hisab_month)`, and settlement tracking indexes.
 6. [`V6__create_employee_rate_history.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V6__create_employee_rate_history.sql): Creates `employee_rate_history` table with foreign keys to owners and employees (`ON DELETE CASCADE`), effective date tracking, index optimizations, and data backfill from current employee rates.
+7. [`V7__add_settlement_clearance_columns.sql`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/resources/db/migration/V7__add_settlement_clearance_columns.sql): Extends `monthly_hisab` with `opening_balance`, `settlement_amount`, and `carry_forward` columns for partial/excess clearance tracking and multi-month advance propagation.
 
 ### Table Schema: `employees`
 | Column | Type | Constraints / Description |
@@ -126,10 +127,13 @@ dev.sonu.saitring_employee_manager/
 | `daily_rate` | `DECIMAL(10, 2)` | Snapshot daily wage rate |
 | `full_days` | `INT` | Count of full days (`PRESENT`) |
 | `half_days` | `INT` | Count of half days (`HALF_DAY`) |
-| `effective_days` | `DOUBLE` | Total effective presenties (`full + 0.5 * half`) |
+| `effective_days` | `DECIMAL(5, 2)` | Total effective presenties (`full + 0.5 * half`) |
+| `opening_balance` | `DECIMAL(10, 2)` | Opening advance balance carried forward from prior month (+/-) |
 | `total_earnings` | `DECIMAL(10, 2)` | Total earnings (`daily_rate * effective_days`) |
-| `total_advance` | `DECIMAL(10, 2)` | Total advance money deducted |
-| `final_money` | `DECIMAL(10, 2)` | Net final payable money (`total_earnings - total_advance`) |
+| `total_advance` | `DECIMAL(10, 2)` | Total advance balance deducted (`opening_balance + month advances`) |
+| `final_money` | `DECIMAL(10, 2)` | Net final money before clearance (`total_earnings - total_advance`) |
+| `settlement_amount` | `DECIMAL(10, 2)` | Actual payout money disbursed to employee upon hisab clearance |
+| `carry_forward` | `DECIMAL(10, 2)` | Carry forward balance propagating to next month (`final_money - settlement_amount`) |
 | `status` | `VARCHAR(20)` | `RUNNING`, `SETTLED` (default: `RUNNING`) |
 | `payment_mode` | `VARCHAR(30)` | `CASH`, `UPI`, `BANK_TRANSFER`, `CHEQUE`, `OTHER` |
 | `settled_at` | `TIMESTAMP` | Settlement timestamp |
@@ -244,9 +248,9 @@ Run the entire test suite via:
 ```bash
 mvn test
 ```
-**Results: 94 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
-- [`HisabServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabServiceTest.java) (10 Unit Tests: earnings, advances, final money calculation, joining date filter, historical wage rate lookup, settled status snapshot, settlement flow, advance closure)
-- [`HisabControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabControllerApiTest.java) (6 End-to-end API, Multi-Tenancy Isolation, Pagination, Monthly Wage Rate Versioning & Strict Business Rule Tests)
+**Results: 98 Tests Run, 0 Failures, 0 Errors, 0 Skipped (BUILD SUCCESS)**
+- [`HisabServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabServiceTest.java) (12 Unit Tests: earnings, advances, final money calculation, joining date filter, historical wage rate lookup, partial settlement clearance, carry-forward opening balance, settled status snapshot, settlement flow, advance closure)
+- [`HisabControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/hisab/HisabControllerApiTest.java) (8 End-to-end API, Multi-Tenancy Isolation, Pagination, Monthly Wage Rate Versioning, Settlement Clearance & Indefinite Multi-Month Cyclic Carry-Forward Propagation Tests)
 - [`AdvanceServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/advance/AdvanceServiceTest.java) (10 Unit Tests: joining date rule, running balance, paginated register, summaries)
 - [`AdvanceControllerApiTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/advance/AdvanceControllerApiTest.java) (6 End-to-end API, Multi-Tenancy & Register Integration Tests)
 - [`AttendanceServiceTest.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/test/java/dev/sonu/saitring_employee_manager/attendance/AttendanceServiceTest.java) (12 Unit Tests)

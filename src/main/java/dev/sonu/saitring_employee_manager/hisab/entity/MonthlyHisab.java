@@ -61,6 +61,15 @@ public class MonthlyHisab {
     @Column(name = "final_money", nullable = false, precision = 10, scale = 2)
     private BigDecimal finalMoney;
 
+    @Column(name = "opening_balance", nullable = false, precision = 10, scale = 2)
+    private BigDecimal openingBalance = BigDecimal.ZERO;
+
+    @Column(name = "settlement_amount", precision = 10, scale = 2)
+    private BigDecimal settlementAmount;
+
+    @Column(name = "carry_forward", nullable = false, precision = 10, scale = 2)
+    private BigDecimal carryForward = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private HisabStatus status = HisabStatus.RUNNING;
@@ -90,20 +99,10 @@ public class MonthlyHisab {
                         int fullDays, int halfDays, BigDecimal effectiveDays,
                         BigDecimal totalEarnings, BigDecimal totalAdvance, BigDecimal finalMoney,
                         HisabStatus status, PaymentMode paymentMode, Instant settledAt, String note) {
-        this.owner = owner;
-        this.employee = employee;
-        this.month = month;
-        this.dailyRate = dailyRate;
-        this.fullDays = fullDays;
-        this.halfDays = halfDays;
-        this.effectiveDays = effectiveDays;
-        this.totalEarnings = totalEarnings;
-        this.totalAdvance = totalAdvance;
-        this.finalMoney = finalMoney;
-        this.status = status;
-        this.paymentMode = paymentMode;
-        this.settledAt = settledAt;
-        this.note = note;
+        this(owner, employee, month, dailyRate, fullDays, halfDays, effectiveDays,
+                BigDecimal.ZERO, totalEarnings, totalAdvance, finalMoney,
+                finalMoney, BigDecimal.ZERO,
+                status, paymentMode, settledAt, note);
     }
 
     public MonthlyHisab(Owner owner, Employee employee, String month, BigDecimal dailyRate,
@@ -112,7 +111,45 @@ public class MonthlyHisab {
                         HisabStatus status, PaymentMode paymentMode, Instant settledAt, String note) {
         this(owner, employee, month, dailyRate, fullDays, halfDays,
                 BigDecimal.valueOf(effectiveDays).setScale(2, RoundingMode.HALF_UP),
-                totalEarnings, totalAdvance, finalMoney, status, paymentMode, settledAt, note);
+                BigDecimal.ZERO, totalEarnings, totalAdvance, finalMoney,
+                finalMoney, BigDecimal.ZERO,
+                status, paymentMode, settledAt, note);
+    }
+
+    public MonthlyHisab(Owner owner, Employee employee, String month, BigDecimal dailyRate,
+                        int fullDays, int halfDays, BigDecimal effectiveDays,
+                        BigDecimal openingBalance, BigDecimal totalEarnings, BigDecimal totalAdvance, BigDecimal finalMoney,
+                        BigDecimal settlementAmount, BigDecimal carryForward,
+                        HisabStatus status, PaymentMode paymentMode, Instant settledAt, String note) {
+        this.owner = owner;
+        this.employee = employee;
+        this.month = month;
+        this.dailyRate = dailyRate;
+        this.fullDays = fullDays;
+        this.halfDays = halfDays;
+        this.effectiveDays = effectiveDays;
+        this.openingBalance = openingBalance != null ? openingBalance : BigDecimal.ZERO;
+        this.totalEarnings = totalEarnings;
+        this.totalAdvance = totalAdvance;
+        this.finalMoney = finalMoney;
+        this.settlementAmount = settlementAmount;
+        this.carryForward = carryForward != null ? carryForward : BigDecimal.ZERO;
+        this.status = status;
+        this.paymentMode = paymentMode;
+        this.settledAt = settledAt;
+        this.note = note;
+    }
+
+    public MonthlyHisab(Owner owner, Employee employee, String month, BigDecimal dailyRate,
+                        int fullDays, int halfDays, double effectiveDays,
+                        BigDecimal openingBalance, BigDecimal totalEarnings, BigDecimal totalAdvance, BigDecimal finalMoney,
+                        BigDecimal settlementAmount, BigDecimal carryForward,
+                        HisabStatus status, PaymentMode paymentMode, Instant settledAt, String note) {
+        this(owner, employee, month, dailyRate, fullDays, halfDays,
+                BigDecimal.valueOf(effectiveDays).setScale(2, RoundingMode.HALF_UP),
+                openingBalance, totalEarnings, totalAdvance, finalMoney,
+                settlementAmount, carryForward,
+                status, paymentMode, settledAt, note);
     }
 
     public Long getId() {
@@ -209,6 +246,30 @@ public class MonthlyHisab {
 
     public void setFinalMoney(BigDecimal finalMoney) {
         this.finalMoney = finalMoney;
+    }
+
+    public BigDecimal getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(BigDecimal openingBalance) {
+        this.openingBalance = openingBalance != null ? openingBalance : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getSettlementAmount() {
+        return settlementAmount;
+    }
+
+    public void setSettlementAmount(BigDecimal settlementAmount) {
+        this.settlementAmount = settlementAmount;
+    }
+
+    public BigDecimal getCarryForward() {
+        return carryForward;
+    }
+
+    public void setCarryForward(BigDecimal carryForward) {
+        this.carryForward = carryForward != null ? carryForward : BigDecimal.ZERO;
     }
 
     public HisabStatus getStatus() {

@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
+
 @Schema(description = "Request body to settle monthly hisab for an employee")
 public class SettleHisabRequest {
 
@@ -23,6 +25,9 @@ public class SettleHisabRequest {
     @Schema(description = "Payment mode for final payout settlement", example = "CASH")
     private PaymentMode paymentMode;
 
+    @Schema(description = "Actual money paid to employee at settlement clearance. If omitted/null, defaults to entire finalMoney (complete payout)", example = "2000.00")
+    private BigDecimal settlementAmount;
+
     @Size(max = 255, message = "Note cannot exceed 255 characters")
     @Schema(description = "Optional settlement remarks or transaction reference", example = "Paid cash at site")
     private String note;
@@ -34,6 +39,14 @@ public class SettleHisabRequest {
         this.employeeId = employeeId;
         this.month = month;
         this.paymentMode = paymentMode;
+        this.note = note;
+    }
+
+    public SettleHisabRequest(Long employeeId, String month, PaymentMode paymentMode, BigDecimal settlementAmount, String note) {
+        this.employeeId = employeeId;
+        this.month = month;
+        this.paymentMode = paymentMode;
+        this.settlementAmount = settlementAmount;
         this.note = note;
     }
 
@@ -59,6 +72,14 @@ public class SettleHisabRequest {
 
     public void setPaymentMode(PaymentMode paymentMode) {
         this.paymentMode = paymentMode;
+    }
+
+    public BigDecimal getSettlementAmount() {
+        return settlementAmount;
+    }
+
+    public void setSettlementAmount(BigDecimal settlementAmount) {
+        this.settlementAmount = settlementAmount;
     }
 
     public String getNote() {

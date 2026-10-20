@@ -24,6 +24,9 @@ public class AdvanceRegisterEmployeeRow {
     @Schema(description = "Joining Date", example = "2026-09-01")
     private LocalDate joiningDate;
 
+    @Schema(description = "Opening advance balance carried forward from prior month (+/-)", example = "1000.00")
+    private BigDecimal openingBalance = BigDecimal.ZERO;
+
     @Schema(description = "List of all advances given to this employee in this month")
     private List<AdvanceResponse> monthlyAdvances;
 
@@ -78,6 +81,14 @@ public class AdvanceRegisterEmployeeRow {
 
     public List<AdvanceResponse> getMonthlyAdvances() {
         return monthlyAdvances;
+    }
+
+    public BigDecimal getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(BigDecimal openingBalance) {
+        this.openingBalance = openingBalance != null ? openingBalance : BigDecimal.ZERO;
     }
 
     public void setMonthlyAdvances(List<AdvanceResponse> monthlyAdvances) {

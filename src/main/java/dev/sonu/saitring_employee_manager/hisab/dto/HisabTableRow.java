@@ -38,7 +38,13 @@ public class HisabTableRow {
     @Schema(description = "Total wages earned (rate * totalPresenties)", example = "13800.00")
     private BigDecimal totalEarnings;
 
-    @Schema(description = "Total advance money taken in this month", example = "3000.00")
+    @Schema(description = "Opening advance balance carried forward from prior settled month (+/-)", example = "1000.00")
+    private BigDecimal openingBalance = BigDecimal.ZERO;
+
+    @Schema(description = "Advance money disbursed in the current month", example = "6000.00")
+    private BigDecimal monthlyAdvance = BigDecimal.ZERO;
+
+    @Schema(description = "Total advance balance for this month (openingBalance + monthlyAdvance)", example = "7000.00")
     private BigDecimal totalAdvance;
 
     @Schema(description = "Cumulative unsettled running advance across all time", example = "3000.00")
@@ -46,6 +52,12 @@ public class HisabTableRow {
 
     @Schema(description = "Final money payable to worker (totalEarnings - totalAdvance)", example = "10800.00")
     private BigDecimal finalMoney;
+
+    @Schema(description = "Actual money paid out to employee upon settlement clearance", example = "2000.00")
+    private BigDecimal settlementAmount;
+
+    @Schema(description = "Carry forward balance to next month's opening advance (finalMoney - settlementAmount)", example = "1000.00")
+    private BigDecimal carryForward;
 
     @Schema(description = "Hisab status (RUNNING or SETTLED)", example = "RUNNING")
     private HisabStatus status;
@@ -134,6 +146,22 @@ public class HisabTableRow {
         this.totalEarnings = totalEarnings;
     }
 
+    public BigDecimal getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(BigDecimal openingBalance) {
+        this.openingBalance = openingBalance != null ? openingBalance : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getMonthlyAdvance() {
+        return monthlyAdvance;
+    }
+
+    public void setMonthlyAdvance(BigDecimal monthlyAdvance) {
+        this.monthlyAdvance = monthlyAdvance != null ? monthlyAdvance : BigDecimal.ZERO;
+    }
+
     public BigDecimal getTotalAdvance() {
         return totalAdvance;
     }
@@ -156,6 +184,22 @@ public class HisabTableRow {
 
     public void setFinalMoney(BigDecimal finalMoney) {
         this.finalMoney = finalMoney;
+    }
+
+    public BigDecimal getSettlementAmount() {
+        return settlementAmount;
+    }
+
+    public void setSettlementAmount(BigDecimal settlementAmount) {
+        this.settlementAmount = settlementAmount;
+    }
+
+    public BigDecimal getCarryForward() {
+        return carryForward;
+    }
+
+    public void setCarryForward(BigDecimal carryForward) {
+        this.carryForward = carryForward;
     }
 
     public HisabStatus getStatus() {

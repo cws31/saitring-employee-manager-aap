@@ -8,10 +8,13 @@ import dev.sonu.saitring_employee_manager.common.exception.ResourceNotFoundExcep
 import dev.sonu.saitring_employee_manager.employee.entity.Employee;
 import dev.sonu.saitring_employee_manager.employee.entity.EmployeeStatus;
 import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRepository;
+import dev.sonu.saitring_employee_manager.hisab.entity.MonthlyHisab;
+import dev.sonu.saitring_employee_manager.hisab.repository.HisabRepository;
 import dev.sonu.saitring_employee_manager.owner.entity.Owner;
 import dev.sonu.saitring_employee_manager.owner.repository.OwnerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,12 +46,26 @@ public class AdvanceServiceImpl implements AdvanceService {
     private final EmployeeRepository employeeRepository;
     private final OwnerRepository ownerRepository;
 
+    @Autowired(required = false)
+    private HisabRepository hisabRepository;
+
     public AdvanceServiceImpl(AdvanceRepository advanceRepository,
                               EmployeeRepository employeeRepository,
                               OwnerRepository ownerRepository) {
         this.advanceRepository = advanceRepository;
         this.employeeRepository = employeeRepository;
         this.ownerRepository = ownerRepository;
+    }
+
+    @Autowired
+    public AdvanceServiceImpl(AdvanceRepository advanceRepository,
+                              EmployeeRepository employeeRepository,
+                              OwnerRepository ownerRepository,
+                              @Autowired(required = false) HisabRepository hisabRepository) {
+        this.advanceRepository = advanceRepository;
+        this.employeeRepository = employeeRepository;
+        this.ownerRepository = ownerRepository;
+        this.hisabRepository = hisabRepository;
     }
 
     @Override
@@ -146,14 +163,28 @@ public class AdvanceServiceImpl implements AdvanceService {
                 runningBalanceMap.put(empId, bal != null ? bal.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             }
 
+            // 3. Fetch prior settled hisab carry-forward (opening advance balance)
+            Map<Long, BigDecimal> openingBalanceMap = new HashMap<>();
+            if (hisabRepository != null) {
+                List<MonthlyHisab> priorSettled = hisabRepository.findPriorSettledHisabsForEmployees(
+                        ownerId, employeeIds, yearMonth.toString()
+                );
+                for (MonthlyHisab ph : priorSettled) {
+                    openingBalanceMap.putIfAbsent(ph.getEmployee().getId(), ph.getCarryForward());
+                }
+            }
+
             for (Employee emp : employeePage.getContent()) {
                 List<Advance> empAdvances = advanceByEmp.getOrDefault(emp.getId(), Collections.emptyList());
                 List<AdvanceResponse> advanceDtos = empAdvances.stream().map(AdvanceResponse::fromEntity).toList();
 
-                BigDecimal monthlyTotal = empAdvances.stream()
+                BigDecimal monthlyDisbursed = empAdvances.stream()
                         .map(Advance::getAmount)
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         .setScale(2, RoundingMode.HALF_UP);
+
+                BigDecimal openingBal = openingBalanceMap.getOrDefault(emp.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal monthlyTotal = openingBal.add(monthlyDisbursed).setScale(2, RoundingMode.HALF_UP);
 
                 BigDecimal runningBalance = runningBalanceMap.getOrDefault(
                         emp.getId(), BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
@@ -166,6 +197,7 @@ public class AdvanceServiceImpl implements AdvanceService {
                 row.setDailyRate(emp.getDailyRate());
                 row.setJoiningDate(emp.getJoiningDate());
                 row.setMonthlyAdvances(advanceDtos);
+                row.setOpeningBalance(openingBal);
                 row.setMonthlyTotal(monthlyTotal);
                 row.setRunningAdvanceBalance(runningBalance);
 

@@ -118,6 +118,15 @@ public class HisabServiceImpl implements HisabService {
                 effectiveRateByEmp.putIfAbsent(rh.getEmployee().getId(), rh.getDailyRate().setScale(2, RoundingMode.HALF_UP));
             }
 
+            // 7. Fetch prior settled hisab carry-forward balances for opening advance balance calculation
+            List<MonthlyHisab> priorSettled = hisabRepository.findPriorSettledHisabsForEmployees(
+                    ownerId, employeeIds, yearMonth.toString()
+            );
+            Map<Long, BigDecimal> openingBalanceMap = new HashMap<>();
+            for (MonthlyHisab ph : priorSettled) {
+                openingBalanceMap.putIfAbsent(ph.getEmployee().getId(), ph.getCarryForward());
+            }
+
             for (Employee emp : employeePage.getContent()) {
                 MonthlyHisab settled = settledMap.get(emp.getId());
                 HisabTableRow row = new HisabTableRow();
@@ -139,8 +148,12 @@ public class HisabServiceImpl implements HisabService {
                     row.setTotalPresenties(settled.getEffectiveDays() != null ? settled.getEffectiveDays().doubleValue() : 0.0);
                     row.setRate(settled.getDailyRate());
                     row.setTotalEarnings(settled.getTotalEarnings());
+                    row.setOpeningBalance(settled.getOpeningBalance());
+                    row.setMonthlyAdvance(settled.getTotalAdvance().subtract(settled.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP));
                     row.setTotalAdvance(settled.getTotalAdvance());
                     row.setFinalMoney(settled.getFinalMoney());
+                    row.setSettlementAmount(settled.getSettlementAmount());
+                    row.setCarryForward(settled.getCarryForward());
                     row.setStatus(settled.getStatus());
                     row.setPaymentMode(settled.getPaymentMode());
                     row.setSettledAt(settled.getSettledAt());
@@ -160,14 +173,20 @@ public class HisabServiceImpl implements HisabService {
                             .reduce(BigDecimal.ZERO, BigDecimal::add)
                             .setScale(2, RoundingMode.HALF_UP);
 
-                    BigDecimal finalMoney = earnings.subtract(monthAdv).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal openingBal = openingBalanceMap.getOrDefault(emp.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal totalAdv = openingBal.add(monthAdv).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal finalMoney = earnings.subtract(totalAdv).setScale(2, RoundingMode.HALF_UP);
 
                     row.setFullDays(full);
                     row.setHalfDays(half);
                     row.setTotalPresenties(effectivePresenties);
                     row.setTotalEarnings(earnings);
-                    row.setTotalAdvance(monthAdv);
+                    row.setOpeningBalance(openingBal);
+                    row.setMonthlyAdvance(monthAdv);
+                    row.setTotalAdvance(totalAdv);
                     row.setFinalMoney(finalMoney);
+                    row.setSettlementAmount(null);
+                    row.setCarryForward(null);
                     row.setStatus(HisabStatus.RUNNING);
                 }
 
@@ -290,11 +309,19 @@ public class HisabServiceImpl implements HisabService {
         BigDecimal earnings = effectiveRate.multiply(BigDecimal.valueOf(effectiveDays))
                 .setScale(2, RoundingMode.HALF_UP);
 
-        // 2. Calculate month advances and mark them as settled
+        // 2. Fetch opening advance balance from latest prior settled hisab
+        List<MonthlyHisab> priorList = hisabRepository.findPriorSettledHisab(
+                ownerId, employee.getId(), request.getMonth().trim(), PageRequest.of(0, 1)
+        );
+        BigDecimal openingBalance = !priorList.isEmpty()
+                ? priorList.get(0).getCarryForward()
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+        // 3. Calculate month advances and mark them as settled
         List<Advance> advances = advanceRepository.findByOwnerIdAndEmployeeIdAndAdvanceDateBetween(
                 ownerId, employee.getId(), startDate, endDate
         );
-        BigDecimal totalAdvance = advances.stream()
+        BigDecimal monthAdvance = advances.stream()
                 .map(Advance::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
@@ -306,7 +333,14 @@ public class HisabServiceImpl implements HisabService {
         }
         advanceRepository.saveAll(advances);
 
+        BigDecimal totalAdvance = openingBalance.add(monthAdvance).setScale(2, RoundingMode.HALF_UP);
         BigDecimal finalMoney = earnings.subtract(totalAdvance).setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal settlementAmount = request.getSettlementAmount() != null
+                ? request.getSettlementAmount().setScale(2, RoundingMode.HALF_UP)
+                : finalMoney;
+
+        BigDecimal carryForward = finalMoney.subtract(settlementAmount).setScale(2, RoundingMode.HALF_UP);
 
         MonthlyHisab hisab = new MonthlyHisab(
                 owner,
@@ -316,9 +350,12 @@ public class HisabServiceImpl implements HisabService {
                 full,
                 half,
                 effectiveDays,
+                openingBalance,
                 earnings,
                 totalAdvance,
                 finalMoney,
+                settlementAmount,
+                carryForward,
                 HisabStatus.SETTLED,
                 request.getPaymentMode(),
                 now,
@@ -326,8 +363,8 @@ public class HisabServiceImpl implements HisabService {
         );
 
         MonthlyHisab saved = hisabRepository.save(hisab);
-        log.info("Settled monthly hisab ID [{}] for employee [{}] in month [{}] with final money [{}]",
-                saved.getId(), employee.getId(), request.getMonth(), finalMoney);
+        log.info("Settled monthly hisab ID [{}] for employee [{}] in month [{}] with final money [{}], settlement amount [{}], carry forward [{}]",
+                saved.getId(), employee.getId(), request.getMonth(), finalMoney, settlementAmount, carryForward);
 
         return HisabResponse.fromEntity(saved);
     }

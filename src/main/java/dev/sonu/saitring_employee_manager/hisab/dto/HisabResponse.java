@@ -45,11 +45,20 @@ public class HisabResponse {
     @Schema(description = "Total wages earned", example = "13800.00")
     private BigDecimal totalEarnings;
 
+    @Schema(description = "Opening advance balance carried forward from prior month", example = "1000.00")
+    private BigDecimal openingBalance;
+
     @Schema(description = "Total advance deducted", example = "3000.00")
     private BigDecimal totalAdvance;
 
     @Schema(description = "Final money (totalEarnings - totalAdvance)", example = "10800.00")
     private BigDecimal finalMoney;
+
+    @Schema(description = "Actual money paid out to employee upon settlement", example = "2000.00")
+    private BigDecimal settlementAmount;
+
+    @Schema(description = "Carry forward balance to next month's opening advance (finalMoney - settlementAmount)", example = "1000.00")
+    private BigDecimal carryForward;
 
     @Schema(description = "Hisab status (RUNNING or SETTLED)", example = "SETTLED")
     private HisabStatus status;
@@ -83,9 +92,12 @@ public class HisabResponse {
         dto.setFullDays(entity.getFullDays());
         dto.setHalfDays(entity.getHalfDays());
         dto.setEffectiveDays(entity.getEffectiveDays() != null ? entity.getEffectiveDays().doubleValue() : 0.0);
+        dto.setOpeningBalance(entity.getOpeningBalance());
         dto.setTotalEarnings(entity.getTotalEarnings());
         dto.setTotalAdvance(entity.getTotalAdvance());
         dto.setFinalMoney(entity.getFinalMoney());
+        dto.setSettlementAmount(entity.getSettlementAmount());
+        dto.setCarryForward(entity.getCarryForward());
         dto.setStatus(entity.getStatus());
         dto.setPaymentMode(entity.getPaymentMode());
         dto.setSettledAt(entity.getSettledAt());
@@ -182,6 +194,14 @@ public class HisabResponse {
         this.totalEarnings = totalEarnings;
     }
 
+    public BigDecimal getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(BigDecimal openingBalance) {
+        this.openingBalance = openingBalance;
+    }
+
     public BigDecimal getTotalAdvance() {
         return totalAdvance;
     }
@@ -196,6 +216,22 @@ public class HisabResponse {
 
     public void setFinalMoney(BigDecimal finalMoney) {
         this.finalMoney = finalMoney;
+    }
+
+    public BigDecimal getSettlementAmount() {
+        return settlementAmount;
+    }
+
+    public void setSettlementAmount(BigDecimal settlementAmount) {
+        this.settlementAmount = settlementAmount;
+    }
+
+    public BigDecimal getCarryForward() {
+        return carryForward;
+    }
+
+    public void setCarryForward(BigDecimal carryForward) {
+        this.carryForward = carryForward;
     }
 
     public HisabStatus getStatus() {

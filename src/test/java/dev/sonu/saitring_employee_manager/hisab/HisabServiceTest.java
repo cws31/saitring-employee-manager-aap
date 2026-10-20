@@ -387,4 +387,94 @@ class HisabServiceTest {
         assertEquals(new BigDecimal("650.00"), octRow.getRate());
         assertEquals(new BigDecimal("650.00"), octRow.getTotalEarnings());
     }
+
+    @Test
+    @DisplayName("settleHisab: partial clearance with custom settlementAmount leaves carry_forward balance for next month")
+    void settleHisab_partialClearance_withCarryForward() {
+        // Earnings = 12000, Advance = 9000, Net = 3000. Owner clears with 2000. Carry forward = 1000.
+        SettleHisabRequest request = new SettleHisabRequest(
+                101L, "2026-09", PaymentMode.CASH, new BigDecimal("2000.00"), "Cleared partly in cash"
+        );
+
+        when(ownerRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(employeeRepository.findByIdAndOwnerId(101L, 1L)).thenReturn(Optional.of(emp1));
+        when(hisabRepository.existsByOwnerIdAndEmployeeIdAndMonth(1L, 101L, "2026-09")).thenReturn(false);
+
+        // 20 days PRESENT @ 600 = 12000.00
+        List<Attendance> attendances = new java.util.ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            attendances.add(new Attendance(owner, emp1, LocalDate.of(2026, 9, i), AttendanceStatus.PRESENT, null));
+        }
+        when(attendanceRepository.findByOwnerIdAndEmployeeIdAndAttendanceDateBetween(
+                1L, 101L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+                .thenReturn(attendances);
+
+        Advance adv = new Advance(owner, emp1, new BigDecimal("9000.00"), LocalDate.of(2026, 9, 15), "Sept Advance");
+        when(advanceRepository.findByOwnerIdAndEmployeeIdAndAdvanceDateBetween(
+                1L, 101L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
+                .thenReturn(List.of(adv));
+
+        when(hisabRepository.save(any(MonthlyHisab.class))).thenAnswer(invocation -> {
+            MonthlyHisab h = invocation.getArgument(0);
+            h.setId(60L);
+            return h;
+        });
+
+        HisabResponse response = hisabService.settleHisab(1L, request);
+
+        assertNotNull(response);
+        assertEquals(new BigDecimal("12000.00"), response.getTotalEarnings());
+        assertEquals(new BigDecimal("9000.00"), response.getTotalAdvance());
+        assertEquals(new BigDecimal("3000.00"), response.getFinalMoney());
+        assertEquals(new BigDecimal("2000.00"), response.getSettlementAmount());
+        assertEquals(new BigDecimal("1000.00"), response.getCarryForward()); // 3000 - 2000 = 1000
+    }
+
+    @Test
+    @DisplayName("getMonthlyHisabTable: dynamically picks up carry_forward from prior settled hisab as opening balance")
+    void getMonthlyHisabTable_withCarryForwardOpeningBalance() {
+        YearMonth octYm = YearMonth.of(2026, 10);
+        Pageable pageable = PageRequest.of(0, 20);
+
+        when(employeeRepository.findEligibleEmployees(eq(1L), eq(LocalDate.of(2026, 10, 31)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(emp1), pageable, 1));
+
+        // Prior settled September hisab had carry forward = 1000.00
+        MonthlyHisab septSettled = new MonthlyHisab(
+                owner, emp1, "2026-09", new BigDecimal("600.00"),
+                20, 0, new BigDecimal("20.00"),
+                BigDecimal.ZERO, new BigDecimal("12000.00"), new BigDecimal("9000.00"), new BigDecimal("3000.00"),
+                new BigDecimal("2000.00"), new BigDecimal("1000.00"),
+                HisabStatus.SETTLED, PaymentMode.CASH, Instant.now(), "Sept settlement"
+        );
+        when(hisabRepository.findPriorSettledHisabsForEmployees(eq(1L), eq(List.of(101L)), eq("2026-10")))
+                .thenReturn(List.of(septSettled));
+
+        // October attendances: 20 days PRESENT @ 600 = 12000.00
+        List<Attendance> attendances = new java.util.ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            attendances.add(new Attendance(owner, emp1, LocalDate.of(2026, 10, i), AttendanceStatus.PRESENT, null));
+        }
+        when(attendanceRepository.findByOwnerIdAndAttendanceDateBetweenAndEmployeeIdIn(
+                eq(1L), eq(LocalDate.of(2026, 10, 1)), eq(LocalDate.of(2026, 10, 31)), eq(List.of(101L))))
+                .thenReturn(attendances);
+
+        // October advances: 2000 + 3000 + 1000 = 6000.00
+        Advance adv1 = new Advance(owner, emp1, new BigDecimal("2000.00"), LocalDate.of(2026, 10, 5), null);
+        Advance adv2 = new Advance(owner, emp1, new BigDecimal("3000.00"), LocalDate.of(2026, 10, 12), null);
+        Advance adv3 = new Advance(owner, emp1, new BigDecimal("1000.00"), LocalDate.of(2026, 10, 20), null);
+        when(advanceRepository.findByOwnerIdAndAdvanceDateBetweenAndEmployeeIdIn(
+                eq(1L), eq(LocalDate.of(2026, 10, 1)), eq(LocalDate.of(2026, 10, 31)), eq(List.of(101L))))
+                .thenReturn(List.of(adv1, adv2, adv3));
+
+        MonthlyHisabTableResponse response = hisabService.getMonthlyHisabTable(1L, octYm, pageable);
+
+        assertNotNull(response);
+        HisabTableRow row = response.getEmployees().get(0);
+        assertEquals(new BigDecimal("1000.00"), row.getOpeningBalance()); // opening balance from Sept
+        assertEquals(new BigDecimal("6000.00"), row.getMonthlyAdvance()); // 2000 + 3000 + 1000
+        assertEquals(new BigDecimal("7000.00"), row.getTotalAdvance()); // 1000 + 6000 = 7000
+        assertEquals(new BigDecimal("12000.00"), row.getTotalEarnings());
+        assertEquals(new BigDecimal("5000.00"), row.getFinalMoney()); // 12000 - 7000 = 5000
+    }
 }
