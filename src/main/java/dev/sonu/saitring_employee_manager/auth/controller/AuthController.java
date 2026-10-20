@@ -1,3 +1,4 @@
+
 package dev.sonu.saitring_employee_manager.auth.controller;
 
 import dev.sonu.saitring_employee_manager.auth.dto.*;
@@ -6,7 +7,9 @@ import dev.sonu.saitring_employee_manager.common.exception.ErrorResponse;
 import dev.sonu.saitring_employee_manager.owner.dto.OwnerResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Encoding;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,90 +22,114 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Authentication", description = "Endpoints for Owner tenant registration, 2FA dynamic login, and OTP verification")
+@Tag(name = "Authentication", description = "Owner registration, two-factor login, and OTP verification")
 public class AuthController {
 
-    private final AuthService authService;
+        private final AuthService authService;
 
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
+        public AuthController(AuthService authService) {
+                this.authService = authService;
+        }
 
-    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Register a new Owner tenant (Multipart/Form-Data)",
-            description = "Registers a new business owner tenant with mandatory details and optional organization logo upload to Supabase.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Owner successfully registered",
-                    content = @Content(schema = @Schema(implementation = OwnerResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Validation error",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Email or mobile number already registered",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<OwnerResponse> registerWithMultipart(
-            @Valid @ModelAttribute RegisterRequest request,
-            @RequestParam(value = "logo", required = false) MultipartFile logo) {
-        OwnerResponse response = authService.register(request, logo);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+        /**
+         * Register an owner using JSON only.
+         * No logo upload is supported by this endpoint.
+         */
+        @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+        @Operation(summary = "Register an owner without a logo", description = "Registers a business owner using a JSON request.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "Owner successfully registered", content = @Content(schema = @Schema(implementation = OwnerResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid registration request", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                        @ApiResponse(responseCode = "409", description = "Email or mobile number already registered", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        })
+        public ResponseEntity<OwnerResponse> registerJson(
+                        @Valid @org.springframework.web.bind.annotation.RequestBody RegisterRequest request) {
 
-    @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Register a new Owner tenant (JSON)",
-            description = "Registers a new business owner tenant without logo file upload.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Owner successfully registered",
-                    content = @Content(schema = @Schema(implementation = OwnerResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Validation error",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Email or mobile number already registered",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<OwnerResponse> registerJson(@Valid @RequestBody RegisterRequest request) {
-        OwnerResponse response = authService.register(request, null);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
+                OwnerResponse response = authService.register(request, null);
 
-    @PostMapping("/login")
-    @Operation(summary = "Initiate Login with Dynamic 2FA",
-            description = "Validates credentials. If owner logged in with email, sends OTP via Brevo to email. If owner logged in with mobile number, sends OTP via Twilio to mobile.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "2FA OTP Challenge generated successfully",
-                    content = @Content(schema = @Schema(implementation = OtpChallengeResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Invalid credentials or inactive account",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<OtpChallengeResponse> login(@Valid @RequestBody LoginRequest request) {
-        OtpChallengeResponse response = authService.initiateLogin(request);
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(response);
+        }
 
-    @PostMapping("/verify-otp")
-    @Operation(summary = "Verify 2FA OTP Code",
-            description = "Verifies 6-digit OTP code against the challenge token. Upon success, returns JWT access token.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "OTP successfully verified; JWT token returned",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid or expired OTP",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        AuthResponse response = authService.verifyOtp(request);
-        return ResponseEntity.ok(response);
-    }
+        /**
+         * Register an owner using multipart/form-data.
+         * The request part must contain JSON.
+         * The logo part is optional.
+         */
+        @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+        @Operation(summary = "Register an owner with an optional logo", description = """
+                        Send a multipart/form-data request.
+                        The 'request' part must be application/json.
+                        The 'logo' part is optional.
+                        """)
+        @RequestBody(required = true, content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE, encoding = {
+                        @Encoding(name = "request", contentType = MediaType.APPLICATION_JSON_VALUE),
+                        @Encoding(name = "logo", contentType = "image/png, image/jpeg, image/webp")
+        }, schema = @Schema(implementation = MultipartRegistrationSchema.class)))
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "Owner successfully registered", content = @Content(schema = @Schema(implementation = OwnerResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid registration request", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                        @ApiResponse(responseCode = "409", description = "Email or mobile number already registered", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                        @ApiResponse(responseCode = "413", description = "Request exceeds upload limits", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                        @ApiResponse(responseCode = "415", description = "Unsupported media type", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        })
+        public ResponseEntity<OwnerResponse> registerWithMultipart(
+                        @Valid @org.springframework.web.bind.annotation.RequestPart("request") RegisterRequest request,
 
-    @PostMapping("/resend-otp")
-    @Operation(summary = "Resend 2FA OTP Code",
-            description = "Resends a fresh OTP code to the challenge's destination with a minimum 30s cooldown.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "New OTP dispatched",
-                    content = @Content(schema = @Schema(implementation = OtpChallengeResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Cooldown active or expired challenge",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<OtpChallengeResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        OtpChallengeResponse response = authService.resendOtp(request);
-        return ResponseEntity.ok(response);
-    }
+                        @org.springframework.web.bind.annotation.RequestPart(value = "logo", required = false) MultipartFile logo) {
+
+                OwnerResponse response = authService.register(request, logo);
+
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(response);
+        }
+
+        @PostMapping("/login")
+        @Operation(summary = "Initiate login with dynamic two-factor authentication", description = "Validates credentials and sends an OTP to the appropriate channel.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "OTP challenge created", content = @Content(schema = @Schema(implementation = OtpChallengeResponse.class))),
+                        @ApiResponse(responseCode = "401", description = "Invalid credentials or inactive account", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        })
+        public ResponseEntity<OtpChallengeResponse> login(
+                        @Valid @org.springframework.web.bind.annotation.RequestBody LoginRequest request) {
+
+                return ResponseEntity.ok(authService.initiateLogin(request));
+        }
+
+        @PostMapping("/verify-otp")
+        @Operation(summary = "Verify the OTP code")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "OTP successfully verified", content = @Content(schema = @Schema(implementation = AuthResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid or expired OTP", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                        @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        })
+        public ResponseEntity<AuthResponse> verifyOtp(
+                        @Valid @org.springframework.web.bind.annotation.RequestBody VerifyOtpRequest request) {
+
+                return ResponseEntity.ok(authService.verifyOtp(request));
+        }
+
+        @PostMapping("/resend-otp")
+        @Operation(summary = "Resend the OTP code")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "New OTP dispatched", content = @Content(schema = @Schema(implementation = OtpChallengeResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Cooldown active or challenge expired", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        })
+        public ResponseEntity<OtpChallengeResponse> resendOtp(
+                        @Valid @org.springframework.web.bind.annotation.RequestBody ResendOtpRequest request) {
+
+                return ResponseEntity.ok(authService.resendOtp(request));
+        }
+
+        @Schema(name = "MultipartRegistrationRequest")
+        public static class MultipartRegistrationSchema {
+
+                @Schema(description = "Owner registration data encoded as JSON", implementation = RegisterRequest.class, requiredMode = Schema.RequiredMode.REQUIRED)
+                public RegisterRequest request;
+
+                @Schema(description = "Optional organization logo", type = "string", format = "binary", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+                public String logo;
+        }
 }
