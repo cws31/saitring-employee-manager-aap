@@ -1,0 +1,15 @@
+# Build output
+/target/
+/build/
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
