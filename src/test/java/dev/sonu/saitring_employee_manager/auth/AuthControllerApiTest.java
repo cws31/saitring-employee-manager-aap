@@ -200,6 +200,67 @@ class AuthControllerApiTest {
     }
 
     @Test
+    @DisplayName("Register with Swagger UI multipart JSON part (-F request={...}) without logo")
+    void registerWithSwaggerUiMultipartJsonPart() throws Exception {
+        String requestJson = "{\"ownerName\":\"shivbachan sah\",\"organizationName\":\"sonu saitring\",\"email\":\"231fa04053@gmail.com\",\"mobileNumber\":\"+917294085931\",\"password\":\"Sonusaitring@31\",\"address\":\"awsanpur\"}";
+        MockMultipartFile emptyLogo = new MockMultipartFile("logo", "", "application/octet-stream", new byte[0]);
+
+        mockMvc.perform(multipart("/api/v1/auth/register")
+                        .file(emptyLogo)
+                        .param("request", requestJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.ownerName", is("shivbachan sah")))
+                .andExpect(jsonPath("$.organizationName", is("sonu saitring")))
+                .andExpect(jsonPath("$.email", is("231fa04053@gmail.com")))
+                .andExpect(jsonPath("$.phoneNumber", is("+917294085931")));
+    }
+
+    @Test
+    @DisplayName("Update profile with Swagger UI multipart JSON part (-F request={...}) without logo")
+    void updateProfileWithSwaggerUiMultipartJsonPart() throws Exception {
+        // Register & login
+        RegisterRequest registerReq = new RegisterRequest(
+                "Shivbachan", "Sonu Saitring", "shiv@gmail.com", "+917294085999", "Pass@123", "Awsanpur"
+        );
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerReq)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginReq = new LoginRequest("shiv@gmail.com", "Pass@123");
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginReq)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String challengeToken = objectMapper.readTree(loginResult.getResponse().getContentAsString()).get("challengeToken").asText();
+        String otp = otpStorageService.getChallenge(challengeToken).orElseThrow().getOtp();
+
+        MvcResult verifyResult = mockMvc.perform(post("/api/v1/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new VerifyOtpRequest(challengeToken, otp))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String token = objectMapper.readTree(verifyResult.getResponse().getContentAsString()).get("accessToken").asText();
+
+        // Update profile using Swagger UI multipart style:
+        String updateJson = "{\"ownerName\":\"Shivbachan Sah\",\"organizationName\":\"Sonu Saitring Works\",\"email\":\"shiv.updated@gmail.com\",\"phoneNumber\":\"+917294085999\",\"address\":\"Awsanpur Main Road\"}";
+        MockMultipartFile emptyLogo = new MockMultipartFile("logo", "", "application/octet-stream", new byte[0]);
+
+        mockMvc.perform(multipart(org.springframework.http.HttpMethod.PUT, "/api/v1/owners/profile")
+                        .file(emptyLogo)
+                        .param("request", updateJson)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerName", is("Shivbachan Sah")))
+                .andExpect(jsonPath("$.organizationName", is("Sonu Saitring Works")))
+                .andExpect(jsonPath("$.email", is("shiv.updated@gmail.com")));
+    }
+
+    @Test
     @DisplayName("Protected endpoint rejects request without Authorization header with 401")
     void protectedEndpointRejectsUnauthenticated() throws Exception {
         mockMvc.perform(get("/api/v1/owners/profile"))
