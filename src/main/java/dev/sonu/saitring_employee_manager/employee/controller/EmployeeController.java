@@ -1,9 +1,7 @@
 package dev.sonu.saitring_employee_manager.employee.controller;
 
 import dev.sonu.saitring_employee_manager.common.exception.ErrorResponse;
-import dev.sonu.saitring_employee_manager.employee.dto.CreateEmployeeRequest;
-import dev.sonu.saitring_employee_manager.employee.dto.EmployeeResponse;
-import dev.sonu.saitring_employee_manager.employee.dto.UpdateEmployeeRequest;
+import dev.sonu.saitring_employee_manager.employee.dto.*;
 import dev.sonu.saitring_employee_manager.employee.entity.EmployeeStatus;
 import dev.sonu.saitring_employee_manager.employee.service.EmployeeService;
 import dev.sonu.saitring_employee_manager.security.OwnerPrincipal;
@@ -168,6 +166,47 @@ public class EmployeeController {
             @AuthenticationPrincipal OwnerPrincipal principal,
             @PathVariable Long id) {
         EmployeeResponse response = employeeService.unblockEmployee(principal.getId(), id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/rates")
+    @Operation(summary = "Record Employee Wage Rate Revision",
+            description = "Logs a new daily wage rate revision with effective date for historical rate tracking.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Wage rate revision recorded successfully",
+                    content = @Content(schema = @Schema(implementation = EmployeeRateResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error or date before joining date",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Employee not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<EmployeeRateResponse> addRateRevision(
+            @AuthenticationPrincipal OwnerPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody RateRevisionRequest request) {
+        EmployeeRateResponse response = employeeService.addRateRevision(principal.getId(), id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{id}/rates")
+    @Operation(summary = "Get Employee Wage Rate History",
+            description = "Retrieves paginated history of wage rate revisions for the employee.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Rate history retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = Page.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Employee not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Page<EmployeeRateResponse>> getEmployeeRateHistory(
+            @AuthenticationPrincipal OwnerPrincipal principal,
+            @PathVariable Long id,
+            @org.springdoc.core.annotations.ParameterObject
+            @PageableDefault(size = 20, sort = "effectiveFrom", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<EmployeeRateResponse> response = employeeService.getEmployeeRateHistory(principal.getId(), id, pageable);
         return ResponseEntity.ok(response);
     }
 }

@@ -6,7 +6,9 @@ import dev.sonu.saitring_employee_manager.employee.dto.CreateEmployeeRequest;
 import dev.sonu.saitring_employee_manager.employee.dto.EmployeeResponse;
 import dev.sonu.saitring_employee_manager.employee.dto.UpdateEmployeeRequest;
 import dev.sonu.saitring_employee_manager.employee.entity.Employee;
+import dev.sonu.saitring_employee_manager.employee.entity.EmployeeRateHistory;
 import dev.sonu.saitring_employee_manager.employee.entity.EmployeeStatus;
+import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRateHistoryRepository;
 import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRepository;
 import dev.sonu.saitring_employee_manager.employee.service.EmployeeServiceImpl;
 import dev.sonu.saitring_employee_manager.owner.entity.Owner;
@@ -41,6 +43,9 @@ class EmployeeServiceTest {
     @Mock
     private OwnerRepository ownerRepository;
 
+    @Mock
+    private EmployeeRateHistoryRepository employeeRateHistoryRepository;
+
     private EmployeeServiceImpl employeeService;
 
     private Owner ownerA;
@@ -48,7 +53,7 @@ class EmployeeServiceTest {
 
     @BeforeEach
     void setUp() {
-        employeeService = new EmployeeServiceImpl(employeeRepository, ownerRepository);
+        employeeService = new EmployeeServiceImpl(employeeRepository, ownerRepository, employeeRateHistoryRepository);
 
         ownerA = new Owner("Owner A", "Org A", "a@org.com", "+919800000001", "hash", "Address A", null);
         ownerA.setId(1L);
@@ -193,6 +198,7 @@ class EmployeeServiceTest {
 
         employeeService.deleteEmployee(1L, 101L);
 
+        verify(employeeRateHistoryRepository).deleteByOwnerIdAndEmployeeId(1L, 101L);
         verify(employeeRepository).delete(employee);
     }
 

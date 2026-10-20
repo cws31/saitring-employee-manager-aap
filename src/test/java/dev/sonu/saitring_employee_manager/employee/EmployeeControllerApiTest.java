@@ -2,6 +2,8 @@ package dev.sonu.saitring_employee_manager.employee;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.sonu.saitring_employee_manager.advance.repository.AdvanceRepository;
+import dev.sonu.saitring_employee_manager.attendance.repository.AttendanceRepository;
 import dev.sonu.saitring_employee_manager.auth.dto.LoginRequest;
 import dev.sonu.saitring_employee_manager.auth.dto.RegisterRequest;
 import dev.sonu.saitring_employee_manager.auth.dto.VerifyOtpRequest;
@@ -9,8 +11,11 @@ import dev.sonu.saitring_employee_manager.auth.service.OtpChallengeData;
 import dev.sonu.saitring_employee_manager.auth.service.OtpStorageService;
 import dev.sonu.saitring_employee_manager.employee.dto.CreateEmployeeRequest;
 import dev.sonu.saitring_employee_manager.employee.dto.UpdateEmployeeRequest;
+import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRateHistoryRepository;
 import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRepository;
 import dev.sonu.saitring_employee_manager.owner.repository.OwnerRepository;
+import dev.sonu.saitring_employee_manager.hisab.repository.HisabRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +47,18 @@ class EmployeeControllerApiTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private HisabRepository hisabRepository;
+
+    @Autowired
+    private AdvanceRepository advanceRepository;
+
+    @Autowired
+    private AttendanceRepository attendanceRepository;
+
+    @Autowired
+    private EmployeeRateHistoryRepository employeeRateHistoryRepository;
+
+    @Autowired
     private EmployeeRepository employeeRepository;
 
     @Autowired
@@ -55,6 +72,10 @@ class EmployeeControllerApiTest {
 
     @BeforeEach
     void setupOwners() throws Exception {
+        hisabRepository.deleteAll();
+        advanceRepository.deleteAll();
+        attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
         employeeRepository.deleteAll();
         ownerRepository.deleteAll();
 
@@ -75,6 +96,16 @@ class EmployeeControllerApiTest {
                 "+919822222222",
                 "Pass@123"
         );
+    }
+
+    @AfterEach
+    void tearDown() {
+        hisabRepository.deleteAll();
+        advanceRepository.deleteAll();
+        attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
+        employeeRepository.deleteAll();
+        ownerRepository.deleteAll();
     }
 
     private String registerAndLogin(String ownerName, String orgName, String email, String mobile, String password) throws Exception {

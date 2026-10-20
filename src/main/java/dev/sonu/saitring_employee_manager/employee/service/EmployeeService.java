@@ -22,4 +22,8 @@ public interface EmployeeService {
     EmployeeResponse blockEmployee(Long ownerId, Long employeeId);
 
     EmployeeResponse unblockEmployee(Long ownerId, Long employeeId);
+
+    dev.sonu.saitring_employee_manager.employee.dto.EmployeeRateResponse addRateRevision(Long ownerId, Long employeeId, dev.sonu.saitring_employee_manager.employee.dto.RateRevisionRequest request);
+
+    Page<dev.sonu.saitring_employee_manager.employee.dto.EmployeeRateResponse> getEmployeeRateHistory(Long ownerId, Long employeeId, Pageable pageable);
 }

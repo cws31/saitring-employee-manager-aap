@@ -30,14 +30,31 @@ public class UpdateEmployeeRequest {
     @Schema(description = "Updated joining date (YYYY-MM-DD)", example = "2026-03-15")
     private LocalDate joiningDate;
 
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    @Schema(description = "Date from which this new daily rate takes effect. If omitted, defaults to joining date or current date", example = "2026-10-01")
+    private LocalDate effectiveFrom;
+
     public UpdateEmployeeRequest() {
     }
 
     public UpdateEmployeeRequest(String employeeName, String mobileNumber, BigDecimal dailyRate, LocalDate joiningDate) {
+        this(employeeName, mobileNumber, dailyRate, joiningDate, null);
+    }
+
+    public UpdateEmployeeRequest(String employeeName, String mobileNumber, BigDecimal dailyRate, LocalDate joiningDate, LocalDate effectiveFrom) {
         this.employeeName = employeeName;
         this.mobileNumber = mobileNumber;
         this.dailyRate = dailyRate;
         this.joiningDate = joiningDate;
+        this.effectiveFrom = effectiveFrom;
+    }
+
+    public LocalDate getEffectiveFrom() {
+        return effectiveFrom;
+    }
+
+    public void setEffectiveFrom(LocalDate effectiveFrom) {
+        this.effectiveFrom = effectiveFrom;
     }
 
     public String getEmployeeName() {

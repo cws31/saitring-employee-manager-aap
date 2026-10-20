@@ -15,9 +15,11 @@ import dev.sonu.saitring_employee_manager.auth.dto.VerifyOtpRequest;
 import dev.sonu.saitring_employee_manager.auth.service.OtpChallengeData;
 import dev.sonu.saitring_employee_manager.auth.service.OtpStorageService;
 import dev.sonu.saitring_employee_manager.employee.dto.CreateEmployeeRequest;
+import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRateHistoryRepository;
 import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRepository;
 import dev.sonu.saitring_employee_manager.owner.repository.OwnerRepository;
 import org.junit.jupiter.api.AfterEach;
+import dev.sonu.saitring_employee_manager.hisab.repository.HisabRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,10 +52,16 @@ class AttendanceControllerApiTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private HisabRepository hisabRepository;
+
+    @Autowired
     private AdvanceRepository advanceRepository;
 
     @Autowired
     private AttendanceRepository attendanceRepository;
+
+    @Autowired
+    private EmployeeRateHistoryRepository employeeRateHistoryRepository;
 
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -69,8 +77,10 @@ class AttendanceControllerApiTest {
 
     @BeforeEach
     void setupData() throws Exception {
+        hisabRepository.deleteAll();
         advanceRepository.deleteAll();
         attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
         employeeRepository.deleteAll();
         ownerRepository.deleteAll();
 
@@ -93,8 +103,10 @@ class AttendanceControllerApiTest {
 
     @AfterEach
     void tearDown() {
+        hisabRepository.deleteAll();
         advanceRepository.deleteAll();
         attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
         employeeRepository.deleteAll();
         ownerRepository.deleteAll();
     }

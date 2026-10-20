@@ -2,13 +2,19 @@ package dev.sonu.saitring_employee_manager.auth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.sonu.saitring_employee_manager.advance.repository.AdvanceRepository;
+import dev.sonu.saitring_employee_manager.attendance.repository.AttendanceRepository;
 import dev.sonu.saitring_employee_manager.auth.dto.LoginRequest;
 import dev.sonu.saitring_employee_manager.auth.dto.RegisterRequest;
 import dev.sonu.saitring_employee_manager.auth.dto.VerifyOtpRequest;
 import dev.sonu.saitring_employee_manager.auth.service.OtpChallengeData;
 import dev.sonu.saitring_employee_manager.auth.service.OtpStorageService;
+import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRateHistoryRepository;
+import dev.sonu.saitring_employee_manager.employee.repository.EmployeeRepository;
 import dev.sonu.saitring_employee_manager.owner.dto.UpdateOwnerProfileRequest;
 import dev.sonu.saitring_employee_manager.owner.repository.OwnerRepository;
+import dev.sonu.saitring_employee_manager.hisab.repository.HisabRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +45,21 @@ class AuthControllerApiTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private HisabRepository hisabRepository;
+
+    @Autowired
+    private AdvanceRepository advanceRepository;
+
+    @Autowired
+    private AttendanceRepository attendanceRepository;
+
+    @Autowired
+    private EmployeeRateHistoryRepository employeeRateHistoryRepository;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @Autowired
     private OwnerRepository ownerRepository;
 
     @Autowired
@@ -46,6 +67,21 @@ class AuthControllerApiTest {
 
     @BeforeEach
     void cleanUp() {
+        hisabRepository.deleteAll();
+        advanceRepository.deleteAll();
+        attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
+        employeeRepository.deleteAll();
+        ownerRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        hisabRepository.deleteAll();
+        advanceRepository.deleteAll();
+        attendanceRepository.deleteAll();
+        employeeRateHistoryRepository.deleteAll();
+        employeeRepository.deleteAll();
         ownerRepository.deleteAll();
     }
 
