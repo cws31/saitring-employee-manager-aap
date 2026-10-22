@@ -43,6 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                    org.slf4j.MDC.put("ownerId", "tenant:" + ownerId);
                 }
             }
         } catch (Exception ex) {

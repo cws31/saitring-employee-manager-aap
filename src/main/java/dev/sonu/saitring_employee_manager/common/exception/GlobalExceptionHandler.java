@@ -37,11 +37,11 @@ public class GlobalExceptionHandler {
         HttpStatus status = HttpStatus.valueOf(ex.getStatus().value());
 
         if (status.is5xxServerError()) {
-            log.error("Application exception on URI [{}], status [{}]",
-                    request.getRequestURI(), status.value());
+            log.error("Application exception on URI [{}], status [{}], traceId [{}]: {}",
+                    request.getRequestURI(), status.value(), org.slf4j.MDC.get("traceId"), ex.getMessage(), ex);
         } else {
-            log.warn("Application exception on URI [{}], status [{}]",
-                    request.getRequestURI(), status.value());
+            log.warn("Application exception on URI [{}], status [{}], traceId [{}]: {}",
+                    request.getRequestURI(), status.value(), org.slf4j.MDC.get("traceId"), ex.getMessage());
         }
 
         ErrorResponse body = ErrorResponse.of(
@@ -281,9 +281,10 @@ public class GlobalExceptionHandler {
             Exception ex,
             HttpServletRequest request) {
 
-        log.error("Unhandled exception processing URI [{}], exception type [{}]",
+        log.error("Unhandled exception processing URI [{}], traceId [{}]: {}",
                 request.getRequestURI(),
-                ex.getClass().getSimpleName(),
+                org.slf4j.MDC.get("traceId"),
+                ex.getMessage(),
                 ex);
 
         ErrorResponse body = ErrorResponse.of(

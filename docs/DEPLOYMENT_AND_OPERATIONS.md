@@ -72,16 +72,21 @@ spring.datasource.hikari.leak-detection-threshold=15000
 
 | Endpoint | Security | Purpose |
 |---|---|---|
-| `GET /actuator/health` | Public | Kubernetes liveness and readiness probe |
+| `GET /actuator/health` | Public | Aggregated health check (DB, Redis, JVM stats) |
+| `GET /actuator/health/liveness` | Public | Kubernetes / Docker liveness probe (`{"status":"UP"}`) |
+| `GET /actuator/health/readiness`| Public | Kubernetes / Docker readiness probe (DB + Redis connectivity) |
 | `GET /actuator/info` | Public | Application metadata, build version, and active profiles |
+| `GET /actuator/prometheus` | Public | Prometheus scrape target for Grafana dashboards |
 | `GET /actuator/metrics` | Authenticated | JVM heap, garbage collection, and HTTP request metrics |
 
-### 4.2 Logging Configuration
-The application outputs standardized, structured log messages with correlated trace IDs:
+### 4.2 Logging Configuration with Distributed Tracing
+The application automatically binds a correlation ID (`traceId`) and tenant identity (`ownerId`) to every request thread:
 
 ```properties
-logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] %-5level %logger{36} - %msg%n
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] [%X{ownerId:-ANON}] %-5level %logger{36} - %msg%n
 ```
+
+Every response returns `X-Trace-Id` in the HTTP response headers and in the JSON error envelope to allow immediate troubleshooting. For full architectural details, see [`docs/OBSERVABILITY_AND_MONITORING.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/OBSERVABILITY_AND_MONITORING.md).
 
 ---
 

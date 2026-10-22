@@ -9,13 +9,14 @@
 [![Redis](https://img.shields.io/badge/Redis-7%20%2F%20Upstash-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![Flyway](https://img.shields.io/badge/Flyway-V1--V7-CC0202?style=for-the-badge&logo=flyway&logoColor=white)](https://flywaydb.org/)
 [![Spring Security](https://img.shields.io/badge/Spring%20Security-6%20Stateless-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white)](https://spring.io/projects/spring-security)
-[![Tests Passing](https://img.shields.io/badge/Tests-99%2F99%20Passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#testing--verification-suite)
+[![Tests Passing](https://img.shields.io/badge/Tests-104%2F104%20Passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#testing--verification-suite)
 
 <p align="center">
   <a href="#system-architecture">Architecture</a> •
   <a href="#multi-tenancy-isolation-model">Multi-Tenancy</a> •
   <a href="#financial-settlement--hisab-engine">Settlement Engine</a> •
   <a href="#database-engineering--schema-lineage">Database & Flyway</a> •
+  <a href="#observability-health-checks--production-monitoring">Observability & Health</a> •
   <a href="#rest-api-contract-reference">API Catalog</a> •
   <a href="#quickstart--local-development">Quickstart</a> •
   <a href="#engineering-documentation-index">Documentation Suite</a>
@@ -266,9 +267,46 @@ The server will start on port `8080` with Flyway automatically executing migrati
 
 ---
 
+## 🔍 Observability, Health Checks & Production Monitoring
+
+SEMA provides end-to-end distributed tracing, structured MDC logging, and production health monitoring to allow immediate isolation and resolution of any production incident.
+
+### 1. Distributed Request Tracing (`X-Trace-Id`)
+Every request is intercepted by [`TraceIdFilter.java`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/src/main/java/dev/sonu/saitring_employee_manager/common/logging/TraceIdFilter.java):
+* **Trace Propagation**: Preserves caller `X-Trace-Id` or generates a cryptographically random UUID.
+* **MDC Context Binding**: Every log line automatically includes `[traceId]` and authenticated `[tenant:ownerId]`:
+  ```text
+  2026-10-22 23:16:04.344 [main] [71b6f73a-c27b-4ef4-9c2b-d1c58d765c43] [tenant:57] INFO  TraceIdFilter - HTTP INBOUND [GET] [/api/v1/hisab?month=2026-10] from IP [127.0.0.1]
+  2026-10-22 23:16:04.354 [main] [71b6f73a-c27b-4ef4-9c2b-d1c58d765c43] [tenant:57] INFO  TraceIdFilter - HTTP OUTBOUND [GET] [/api/v1/hisab] -> Status [200] in [10ms]
+  ```
+* **Response Header**: Returns `X-Trace-Id` in all HTTP response headers and error envelopes.
+
+### 2. Investigating Production Incidents in Seconds
+When a failure occurs:
+1. Grab the `traceId` from the client response header `X-Trace-Id` or error body (`$.traceId`).
+2. Grep your log aggregator (CloudWatch, ELK, Datadog, Loki) for that `traceId`:
+   ```bash
+   grep "71b6f73a-c27b-4ef4-9c2b-d1c58d765c43" /var/log/sema/application.log
+   ```
+3. Instantly review the entire execution history, exact tenant identity, request parameters, duration, and root cause stack trace.
+
+### 3. Actuator Health & Monitoring Endpoints
+| Endpoint | Access | Purpose |
+|---|:---:|---|
+| `GET /actuator/health` | **Public** | Aggregated health check including JVM memory, thread count, DB ping, and Redis ping |
+| `GET /actuator/health/liveness` | **Public** | Kubernetes / Docker container liveness probe (`{"status":"UP"}`) |
+| `GET /actuator/health/readiness`| **Public** | Kubernetes / Docker readiness probe (DB + Redis connectivity validation) |
+| `GET /actuator/info` | **Public** | Application metadata, git/build info, and active runtime profile |
+| `GET /actuator/prometheus` | **Public** | Prometheus metrics scrape endpoint for Grafana dashboards |
+| `GET /actuator/metrics` | Authenticated | Runtime metrics catalog (JVM heap, HikariCP pool, HTTP request latency) |
+
+For complete setup guides and Prometheus/Grafana scrape configurations, see [`docs/OBSERVABILITY_AND_MONITORING.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/OBSERVABILITY_AND_MONITORING.md).
+
+---
+
 ## 🧪 Testing & Verification Suite
 
-The repository features comprehensive automated test coverage validating business calculations, multi-tenant boundaries, rate resolution, cyclic carry-forwards, and API controllers.
+The repository features comprehensive automated test coverage validating business calculations, multi-tenant boundaries, rate resolution, cyclic carry-forwards, API controllers, and observability filters.
 
 Run the entire test suite:
 ```bash
@@ -287,6 +325,7 @@ mvn test
 [INFO] Running dev.sonu.saitring_employee_manager.auth.AuthControllerApiTest (7 tests)
 [INFO] Running dev.sonu.saitring_employee_manager.auth.AuthServiceTest (5 tests)
 [INFO] Running dev.sonu.saitring_employee_manager.auth.OtpServiceTest (4 tests)
+[INFO] Running dev.sonu.saitring_employee_manager.common.ObservabilityAndHealthTest (5 tests)
 [INFO] Running dev.sonu.saitring_employee_manager.employee.EmployeeControllerApiTest (5 tests)
 [INFO] Running dev.sonu.saitring_employee_manager.employee.EmployeeServiceTest (12 tests)
 [INFO] Running dev.sonu.saitring_employee_manager.hisab.HisabControllerApiTest (8 tests)
@@ -296,7 +335,7 @@ mvn test
 [INFO] 
 [INFO] Results:
 [INFO] 
-[INFO] Tests run: 99, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 104, Failures: 0, Errors: 0, Skipped: 0
 [INFO] 
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
@@ -311,6 +350,7 @@ For exhaustive technical depth, consult the dedicated architecture specification
 
 | Specification Document | Focus Area |
 |---|---|
+| [`docs/OBSERVABILITY_AND_MONITORING.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/OBSERVABILITY_AND_MONITORING.md) | Distributed request tracing (`X-Trace-Id`), MDC log structure, incident investigation, Actuator probes, and Prometheus scraping. |
 | [`docs/ARCHITECTURE.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/ARCHITECTURE.md) | Clean Architecture layers, Domain-Driven Design (DDD), Sequence diagrams, N+1 query elimination. |
 | [`docs/SETTLEMENT_AND_CALCULATION_ENGINE.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/SETTLEMENT_AND_CALCULATION_ENGINE.md) | Mathematical formulation of Hisab, daily wage history resolution, partial clearance, and cyclic carry-forward. |
 | [`docs/DATABASE_DESIGN.md`](file:///d:/DOWNLOADS/freelance-projects/saitring-employee-manager/docs/DATABASE_DESIGN.md) | Full Entity-Relationship schema, Flyway migrations V1–V7, composite indexing strategy, and connection pool sizing. |
