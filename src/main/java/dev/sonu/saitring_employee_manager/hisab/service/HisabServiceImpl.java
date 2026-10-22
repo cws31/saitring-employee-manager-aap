@@ -1,3 +1,4 @@
+
 package dev.sonu.saitring_employee_manager.hisab.service;
 
 import dev.sonu.saitring_employee_manager.advance.entity.Advance;
@@ -38,381 +39,768 @@ import java.util.stream.Collectors;
 @Service
 public class HisabServiceImpl implements HisabService {
 
-    private static final Logger log = LoggerFactory.getLogger(HisabServiceImpl.class);
+        private static final Logger log = LoggerFactory.getLogger(HisabServiceImpl.class);
 
-    private static final Set<String> ALLOWED_EMPLOYEE_SORT_PROPERTIES = Set.of(
-            "id", "employeeName", "mobileNumber", "dailyRate", "joiningDate"
-    );
+        private static final Set<String> ALLOWED_EMPLOYEE_SORT_PROPERTIES = Set.of(
+                        "id", "employeeName", "mobileNumber", "dailyRate", "joiningDate");
 
-    private final HisabRepository hisabRepository;
-    private final AttendanceRepository attendanceRepository;
-    private final AdvanceRepository advanceRepository;
-    private final EmployeeRepository employeeRepository;
-    private final OwnerRepository ownerRepository;
-    private final EmployeeRateHistoryRepository employeeRateHistoryRepository;
+        private final HisabRepository hisabRepository;
+        private final AttendanceRepository attendanceRepository;
+        private final AdvanceRepository advanceRepository;
+        private final EmployeeRepository employeeRepository;
+        private final OwnerRepository ownerRepository;
+        private final EmployeeRateHistoryRepository employeeRateHistoryRepository;
 
-    public HisabServiceImpl(HisabRepository hisabRepository,
-                            AttendanceRepository attendanceRepository,
-                            AdvanceRepository advanceRepository,
-                            EmployeeRepository employeeRepository,
-                            OwnerRepository ownerRepository,
-                            EmployeeRateHistoryRepository employeeRateHistoryRepository) {
-        this.hisabRepository = hisabRepository;
-        this.attendanceRepository = attendanceRepository;
-        this.advanceRepository = advanceRepository;
-        this.employeeRepository = employeeRepository;
-        this.ownerRepository = ownerRepository;
-        this.employeeRateHistoryRepository = employeeRateHistoryRepository;
-    }
+        public HisabServiceImpl(
+                        HisabRepository hisabRepository,
+                        AttendanceRepository attendanceRepository,
+                        AdvanceRepository advanceRepository,
+                        EmployeeRepository employeeRepository,
+                        OwnerRepository ownerRepository,
+                        EmployeeRateHistoryRepository employeeRateHistoryRepository) {
 
-    @Override
-    @Transactional(readOnly = true)
-    public MonthlyHisabTableResponse getMonthlyHisabTable(Long ownerId, YearMonth yearMonth, Pageable pageable) {
-        LocalDate startDate = yearMonth.atDay(1);
-        LocalDate endDate = yearMonth.atEndOfMonth();
+                this.hisabRepository = hisabRepository;
+                this.attendanceRepository = attendanceRepository;
+                this.advanceRepository = advanceRepository;
+                this.employeeRepository = employeeRepository;
+                this.ownerRepository = ownerRepository;
+                this.employeeRateHistoryRepository = employeeRateHistoryRepository;
+        }
 
-        // 1. Paginate active employees who joined on or before month end
-        Pageable safePageable = sanitizePageable(pageable, ALLOWED_EMPLOYEE_SORT_PROPERTIES, "joiningDate", Sort.Direction.ASC);
-        Page<Employee> employeePage = employeeRepository.findEligibleEmployees(ownerId, endDate, safePageable);
+        @Override
+        @Transactional(readOnly = true)
+        public MonthlyHisabTableResponse getMonthlyHisabTable(
+                        Long ownerId,
+                        YearMonth yearMonth,
+                        Pageable pageable) {
 
-        List<HisabTableRow> rows = new ArrayList<>();
-        if (!employeePage.isEmpty()) {
-            List<Long> employeeIds = employeePage.getContent().stream().map(Employee::getId).toList();
+                LocalDate startDate = yearMonth.atDay(1);
+                LocalDate endDate = yearMonth.atEndOfMonth();
 
-            // 2. Fetch attendances for employees on this page
-            List<Attendance> attendances = attendanceRepository.findByOwnerIdAndAttendanceDateBetweenAndEmployeeIdIn(
-                    ownerId, startDate, endDate, employeeIds
-            );
-            Map<Long, List<Attendance>> attByEmp = attendances.stream()
-                    .collect(Collectors.groupingBy(a -> a.getEmployee().getId()));
+                Pageable safePageable = sanitizePageable(
+                                pageable,
+                                ALLOWED_EMPLOYEE_SORT_PROPERTIES,
+                                "joiningDate",
+                                Sort.Direction.ASC);
 
-            // 3. Fetch monthly advances for employees on this page
-            List<Advance> advances = advanceRepository.findByOwnerIdAndAdvanceDateBetweenAndEmployeeIdIn(
-                    ownerId, startDate, endDate, employeeIds
-            );
-            Map<Long, List<Advance>> advByEmp = advances.stream()
-                    .collect(Collectors.groupingBy(a -> a.getEmployee().getId()));
+                Page<Employee> employeePage = employeeRepository.findEligibleEmployees(
+                                ownerId,
+                                endDate,
+                                safePageable);
 
-            // 4. Fetch cumulative running advances for employees on this page
-            List<Object[]> runningAdvances = advanceRepository.sumRunningAdvanceByEmployeeIds(ownerId, employeeIds);
-            Map<Long, BigDecimal> runningAdvMap = new HashMap<>();
-            for (Object[] row : runningAdvances) {
-                Long empId = (Long) row[0];
-                BigDecimal bal = (BigDecimal) row[1];
-                runningAdvMap.put(empId, bal != null ? bal.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            }
+                List<HisabTableRow> rows = new ArrayList<>();
 
-            // 5. Fetch settled hisab records if already settled for any of these employees
-            List<MonthlyHisab> settledList = hisabRepository.findByOwnerIdAndMonthAndEmployeeIdIn(
-                    ownerId, yearMonth.toString(), employeeIds
-            );
-            Map<Long, MonthlyHisab> settledMap = settledList.stream()
-                    .collect(Collectors.toMap(h -> h.getEmployee().getId(), h -> h));
+                if (!employeePage.isEmpty()) {
 
-            // 6. Fetch historical wage rates active on or before month end for employees on this page
-            List<EmployeeRateHistory> rates = employeeRateHistoryRepository.findEffectiveRatesForEmployeesOnOrBefore(
-                    ownerId, employeeIds, endDate
-            );
-            Map<Long, BigDecimal> effectiveRateByEmp = new HashMap<>();
-            for (EmployeeRateHistory rh : rates) {
-                effectiveRateByEmp.putIfAbsent(rh.getEmployee().getId(), rh.getDailyRate().setScale(2, RoundingMode.HALF_UP));
-            }
+                        List<Long> employeeIds = employeePage.getContent()
+                                        .stream()
+                                        .map(Employee::getId)
+                                        .toList();
 
-            // 7. Fetch prior settled hisab carry-forward balances for opening advance balance calculation
-            List<MonthlyHisab> priorSettled = hisabRepository.findPriorSettledHisabsForEmployees(
-                    ownerId, employeeIds, yearMonth.toString()
-            );
-            Map<Long, BigDecimal> openingBalanceMap = new HashMap<>();
-            for (MonthlyHisab ph : priorSettled) {
-                openingBalanceMap.putIfAbsent(ph.getEmployee().getId(), ph.getCarryForward());
-            }
+                        List<Attendance> attendances = attendanceRepository
+                                        .findByOwnerIdAndAttendanceDateBetweenAndEmployeeIdIn(
+                                                        ownerId,
+                                                        startDate,
+                                                        endDate,
+                                                        employeeIds);
 
-            for (Employee emp : employeePage.getContent()) {
-                MonthlyHisab settled = settledMap.get(emp.getId());
-                HisabTableRow row = new HisabTableRow();
-                row.setEmployeeId(emp.getId());
-                row.setEmployeeName(emp.getEmployeeName());
-                row.setMobileNumber(emp.getMobileNumber());
-                row.setJoiningDate(emp.getJoiningDate());
+                        Map<Long, List<Attendance>> attByEmp = attendances.stream()
+                                        .collect(Collectors.groupingBy(
+                                                        a -> a.getEmployee().getId()));
 
-                BigDecimal activeRate = effectiveRateByEmp.getOrDefault(
-                        emp.getId(),
-                        emp.getDailyRate().setScale(2, RoundingMode.HALF_UP)
-                );
-                row.setRate(activeRate);
+                        List<Advance> advances = advanceRepository
+                                        .findByOwnerIdAndAdvanceDateBetweenAndEmployeeIdIn(
+                                                        ownerId,
+                                                        startDate,
+                                                        endDate,
+                                                        employeeIds);
 
-                if (settled != null) {
-                    // Use settled snapshot values
-                    row.setFullDays(settled.getFullDays());
-                    row.setHalfDays(settled.getHalfDays());
-                    row.setTotalPresenties(settled.getEffectiveDays() != null ? settled.getEffectiveDays().doubleValue() : 0.0);
-                    row.setRate(settled.getDailyRate());
-                    row.setTotalEarnings(settled.getTotalEarnings());
-                    row.setOpeningBalance(settled.getOpeningBalance());
-                    row.setMonthlyAdvance(settled.getTotalAdvance().add(settled.getOpeningBalance()).setScale(2, RoundingMode.HALF_UP));
-                    row.setTotalAdvance(settled.getTotalAdvance());
-                    row.setFinalMoney(settled.getFinalMoney());
-                    row.setSettlementAmount(settled.getSettlementAmount());
-                    row.setCarryForward(settled.getCarryForward());
-                    row.setStatus(settled.getStatus());
-                    row.setPaymentMode(settled.getPaymentMode());
-                    row.setSettledAt(settled.getSettledAt());
-                    row.setNote(settled.getNote());
-                } else {
-                    // Dynamic live running hisab computation using month's active wage rate
-                    List<Attendance> empAtts = attByEmp.getOrDefault(emp.getId(), Collections.emptyList());
-                    int full = (int) empAtts.stream().filter(a -> a.getStatus() == AttendanceStatus.PRESENT).count();
-                    int half = (int) empAtts.stream().filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY).count();
-                    double effectivePresenties = full + (0.5 * half);
-                    BigDecimal earnings = activeRate.multiply(BigDecimal.valueOf(effectivePresenties))
-                            .setScale(2, RoundingMode.HALF_UP);
+                        Map<Long, List<Advance>> advByEmp = advances.stream()
+                                        .collect(Collectors.groupingBy(
+                                                        a -> a.getEmployee().getId()));
 
-                    List<Advance> empAdvs = advByEmp.getOrDefault(emp.getId(), Collections.emptyList());
-                    BigDecimal monthAdv = empAdvs.stream()
-                            .map(Advance::getAmount)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add)
-                            .setScale(2, RoundingMode.HALF_UP);
+                        List<Object[]> runningAdvances = advanceRepository.sumRunningAdvanceByEmployeeIds(
+                                        ownerId,
+                                        employeeIds);
 
-                    BigDecimal openingBal = openingBalanceMap.getOrDefault(emp.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-                    BigDecimal totalAdv = monthAdv.subtract(openingBal).setScale(2, RoundingMode.HALF_UP);
-                    BigDecimal finalMoney = earnings.subtract(totalAdv).setScale(2, RoundingMode.HALF_UP);
+                        Map<Long, BigDecimal> runningAdvMap = new HashMap<>();
 
-                    row.setFullDays(full);
-                    row.setHalfDays(half);
-                    row.setTotalPresenties(effectivePresenties);
-                    row.setTotalEarnings(earnings);
-                    row.setOpeningBalance(openingBal);
-                    row.setMonthlyAdvance(monthAdv);
-                    row.setTotalAdvance(totalAdv);
-                    row.setFinalMoney(finalMoney);
-                    row.setSettlementAmount(null);
-                    row.setCarryForward(null);
-                    row.setStatus(HisabStatus.RUNNING);
+                        for (Object[] result : runningAdvances) {
+
+                                Long empId = (Long) result[0];
+                                BigDecimal bal = (BigDecimal) result[1];
+
+                                runningAdvMap.put(
+                                                empId,
+                                                bal != null
+                                                                ? bal.setScale(2, RoundingMode.HALF_UP)
+                                                                : BigDecimal.ZERO.setScale(
+                                                                                2,
+                                                                                RoundingMode.HALF_UP));
+                        }
+
+                        List<MonthlyHisab> settledList = hisabRepository.findByOwnerIdAndMonthAndEmployeeIdIn(
+                                        ownerId,
+                                        yearMonth.toString(),
+                                        employeeIds);
+
+                        Map<Long, MonthlyHisab> settledMap = settledList.stream()
+                                        .collect(Collectors.toMap(
+                                                        h -> h.getEmployee().getId(),
+                                                        h -> h));
+
+                        List<EmployeeRateHistory> rates = employeeRateHistoryRepository
+                                        .findEffectiveRatesForEmployeesOnOrBefore(
+                                                        ownerId,
+                                                        employeeIds,
+                                                        endDate);
+
+                        Map<Long, BigDecimal> effectiveRateByEmp = new HashMap<>();
+
+                        for (EmployeeRateHistory rh : rates) {
+
+                                effectiveRateByEmp.putIfAbsent(
+                                                rh.getEmployee().getId(),
+                                                rh.getDailyRate().setScale(
+                                                                2,
+                                                                RoundingMode.HALF_UP));
+                        }
+
+                        List<MonthlyHisab> priorSettled = hisabRepository.findPriorSettledHisabsForEmployees(
+                                        ownerId,
+                                        employeeIds,
+                                        yearMonth.toString());
+
+                        Map<Long, BigDecimal> openingBalanceMap = new HashMap<>();
+
+                        for (MonthlyHisab ph : priorSettled) {
+
+                                openingBalanceMap.putIfAbsent(
+                                                ph.getEmployee().getId(),
+                                                ph.getCarryForward());
+                        }
+
+                        for (Employee emp : employeePage.getContent()) {
+
+                                MonthlyHisab settled = settledMap.get(emp.getId());
+
+                                HisabTableRow row = new HisabTableRow();
+
+                                row.setEmployeeId(emp.getId());
+                                row.setEmployeeName(emp.getEmployeeName());
+                                row.setMobileNumber(emp.getMobileNumber());
+                                row.setJoiningDate(emp.getJoiningDate());
+
+                                BigDecimal activeRate = effectiveRateByEmp.getOrDefault(
+                                                emp.getId(),
+                                                emp.getDailyRate().setScale(
+                                                                2,
+                                                                RoundingMode.HALF_UP));
+
+                                row.setRate(activeRate);
+
+                                if (settled != null) {
+
+                                        row.setFullDays(settled.getFullDays());
+                                        row.setHalfDays(settled.getHalfDays());
+
+                                        row.setTotalPresenties(
+                                                        settled.getEffectiveDays() != null
+                                                                        ? settled.getEffectiveDays().doubleValue()
+                                                                        : 0.0);
+
+                                        row.setRate(settled.getDailyRate());
+                                        row.setTotalEarnings(settled.getTotalEarnings());
+                                        row.setOpeningBalance(settled.getOpeningBalance());
+
+                                        row.setMonthlyAdvance(
+                                                        settled.getTotalAdvance()
+                                                                        .add(settled.getOpeningBalance())
+                                                                        .setScale(2, RoundingMode.HALF_UP));
+
+                                        row.setTotalAdvance(settled.getTotalAdvance());
+                                        row.setFinalMoney(settled.getFinalMoney());
+                                        row.setSettlementAmount(settled.getSettlementAmount());
+                                        row.setCarryForward(settled.getCarryForward());
+                                        row.setStatus(settled.getStatus());
+                                        row.setPaymentMode(settled.getPaymentMode());
+                                        row.setSettledAt(settled.getSettledAt());
+                                        row.setNote(settled.getNote());
+
+                                } else {
+
+                                        List<Attendance> empAtts = attByEmp.getOrDefault(
+                                                        emp.getId(),
+                                                        Collections.emptyList());
+
+                                        int full = (int) empAtts.stream()
+                                                        .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                                                        .count();
+
+                                        int half = (int) empAtts.stream()
+                                                        .filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY)
+                                                        .count();
+
+                                        double effectivePresenties = full + (0.5 * half);
+
+                                        BigDecimal earnings = activeRate
+                                                        .multiply(
+                                                                        BigDecimal.valueOf(effectivePresenties))
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        List<Advance> empAdvs = advByEmp.getOrDefault(
+                                                        emp.getId(),
+                                                        Collections.emptyList());
+
+                                        BigDecimal monthAdv = empAdvs.stream()
+                                                        .map(Advance::getAmount)
+                                                        .reduce(
+                                                                        BigDecimal.ZERO,
+                                                                        BigDecimal::add)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        BigDecimal openingBal = openingBalanceMap.getOrDefault(
+                                                        emp.getId(),
+                                                        BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+
+                                        BigDecimal totalAdv = monthAdv
+                                                        .subtract(openingBal)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        BigDecimal finalMoney = earnings
+                                                        .subtract(totalAdv)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        row.setFullDays(full);
+                                        row.setHalfDays(half);
+                                        row.setTotalPresenties(effectivePresenties);
+                                        row.setTotalEarnings(earnings);
+                                        row.setOpeningBalance(openingBal);
+                                        row.setMonthlyAdvance(monthAdv);
+                                        row.setTotalAdvance(totalAdv);
+                                        row.setFinalMoney(finalMoney);
+                                        row.setSettlementAmount(null);
+                                        row.setCarryForward(null);
+                                        row.setStatus(HisabStatus.RUNNING);
+                                }
+
+                                BigDecimal runningBal = runningAdvMap.getOrDefault(
+                                                emp.getId(),
+                                                BigDecimal.ZERO.setScale(
+                                                                2,
+                                                                RoundingMode.HALF_UP));
+
+                                row.setRunningAdvanceBalance(runningBal);
+
+                                rows.add(row);
+                        }
                 }
 
-                BigDecimal runningBal = runningAdvMap.getOrDefault(emp.getId(), BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-                row.setRunningAdvanceBalance(runningBal);
+                List<Attendance> allMonthAttendances = attendanceRepository
+                                .findByOwnerIdAndAttendanceDateBetween(
+                                                ownerId,
+                                                startDate,
+                                                endDate);
 
-                rows.add(row);
-            }
+                int totalFull = (int) allMonthAttendances.stream()
+                                .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                                .count();
+
+                int totalHalf = (int) allMonthAttendances.stream()
+                                .filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY)
+                                .count();
+
+                double totalEffectivePresenties = totalFull + (0.5 * totalHalf);
+
+                List<Employee> allEligibleEmployees = employeeRepository.findEligibleEmployees(
+                                ownerId,
+                                endDate);
+
+                Map<Long, List<Attendance>> allAttByEmp = allMonthAttendances.stream()
+                                .collect(Collectors.groupingBy(
+                                                a -> a.getEmployee().getId()));
+
+                List<Long> allEmpIds = allEligibleEmployees.stream()
+                                .map(Employee::getId)
+                                .toList();
+
+                Map<Long, BigDecimal> allOrgEffectiveRates = new HashMap<>();
+
+                if (!allEmpIds.isEmpty()) {
+
+                        List<EmployeeRateHistory> allRates = employeeRateHistoryRepository
+                                        .findEffectiveRatesForEmployeesOnOrBefore(
+                                                        ownerId,
+                                                        allEmpIds,
+                                                        endDate);
+
+                        for (EmployeeRateHistory rh : allRates) {
+
+                                allOrgEffectiveRates.putIfAbsent(
+                                                rh.getEmployee().getId(),
+                                                rh.getDailyRate().setScale(
+                                                                2,
+                                                                RoundingMode.HALF_UP));
+                        }
+                }
+
+                BigDecimal totalOrgEarnings = BigDecimal.ZERO.setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+                for (Employee e : allEligibleEmployees) {
+
+                        BigDecimal empRate = allOrgEffectiveRates.getOrDefault(
+                                        e.getId(),
+                                        e.getDailyRate().setScale(
+                                                        2,
+                                                        RoundingMode.HALF_UP));
+
+                        List<Attendance> atts = allAttByEmp.getOrDefault(
+                                        e.getId(),
+                                        Collections.emptyList());
+
+                        long f = atts.stream()
+                                        .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                                        .count();
+
+                        long h = atts.stream()
+                                        .filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY)
+                                        .count();
+
+                        double eff = f + (0.5 * h);
+
+                        BigDecimal empEarnings = empRate
+                                        .multiply(BigDecimal.valueOf(eff))
+                                        .setScale(2, RoundingMode.HALF_UP);
+
+                        totalOrgEarnings = totalOrgEarnings.add(empEarnings);
+                }
+
+                BigDecimal rawTotalOrgAdvance = advanceRepository.sumAdvancesDisbursedBetween(
+                                ownerId,
+                                startDate,
+                                endDate);
+
+                BigDecimal totalOrgAdvance = rawTotalOrgAdvance != null
+                                ? rawTotalOrgAdvance.setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)
+                                : BigDecimal.ZERO.setScale(
+                                                2,
+                                                RoundingMode.HALF_UP);
+
+                BigDecimal totalOrgFinalMoney = BigDecimal.ZERO.setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+                BigDecimal totalOrgOverdue = BigDecimal.ZERO.setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+                if (!allEmpIds.isEmpty()) {
+
+                        List<MonthlyHisab> allSettledRecords = hisabRepository.findByOwnerIdAndMonthAndEmployeeIdIn(
+                                        ownerId,
+                                        yearMonth.toString(),
+                                        allEmpIds);
+
+                        Map<Long, MonthlyHisab> allSettledMap = allSettledRecords.stream()
+                                        .collect(Collectors.toMap(
+                                                        h -> h.getEmployee().getId(),
+                                                        h -> h));
+
+                        List<Advance> allMonthAdvances = advanceRepository
+                                        .findByOwnerIdAndAdvanceDateBetweenAndEmployeeIdIn(
+                                                        ownerId,
+                                                        startDate,
+                                                        endDate,
+                                                        allEmpIds);
+
+                        Map<Long, List<Advance>> allAdvByEmp = allMonthAdvances.stream()
+                                        .collect(Collectors.groupingBy(
+                                                        a -> a.getEmployee().getId()));
+
+                        List<MonthlyHisab> allPriorSettled = hisabRepository.findPriorSettledHisabsForEmployees(
+                                        ownerId,
+                                        allEmpIds,
+                                        yearMonth.toString());
+
+                        Map<Long, BigDecimal> allOpeningBalanceMap = new HashMap<>();
+
+                        for (MonthlyHisab previous : allPriorSettled) {
+
+                                allOpeningBalanceMap.putIfAbsent(
+                                                previous.getEmployee().getId(),
+                                                previous.getCarryForward());
+                        }
+
+                        for (Employee emp : allEligibleEmployees) {
+
+                                MonthlyHisab settled = allSettledMap.get(emp.getId());
+
+                                BigDecimal finalPayable;
+
+                                if (settled != null) {
+
+                                        finalPayable = settled.getFinalMoney();
+
+                                } else {
+
+                                        BigDecimal activeRate = allOrgEffectiveRates.getOrDefault(
+                                                        emp.getId(),
+                                                        emp.getDailyRate().setScale(
+                                                                        2,
+                                                                        RoundingMode.HALF_UP));
+
+                                        List<Attendance> empAtts = allAttByEmp.getOrDefault(
+                                                        emp.getId(),
+                                                        Collections.emptyList());
+
+                                        int full = (int) empAtts.stream()
+                                                        .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                                                        .count();
+
+                                        int half = (int) empAtts.stream()
+                                                        .filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY)
+                                                        .count();
+
+                                        double effectivePresenties = full + (0.5 * half);
+
+                                        BigDecimal earnings = activeRate
+                                                        .multiply(
+                                                                        BigDecimal.valueOf(effectivePresenties))
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        List<Advance> empAdvs = allAdvByEmp.getOrDefault(
+                                                        emp.getId(),
+                                                        Collections.emptyList());
+
+                                        BigDecimal monthAdv = empAdvs.stream()
+                                                        .map(Advance::getAmount)
+                                                        .reduce(
+                                                                        BigDecimal.ZERO,
+                                                                        BigDecimal::add)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        BigDecimal openingBal = allOpeningBalanceMap.getOrDefault(
+                                                        emp.getId(),
+                                                        BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+
+                                        BigDecimal totalAdv = monthAdv
+                                                        .subtract(openingBal)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+
+                                        finalPayable = earnings
+                                                        .subtract(totalAdv)
+                                                        .setScale(2, RoundingMode.HALF_UP);
+                                }
+
+                                if (finalPayable.compareTo(BigDecimal.ZERO) > 0) {
+
+                                        totalOrgFinalMoney = totalOrgFinalMoney.add(finalPayable);
+
+                                } else if (finalPayable.compareTo(BigDecimal.ZERO) < 0) {
+
+                                        totalOrgOverdue = totalOrgOverdue.add(finalPayable.abs());
+                                }
+                        }
+                }
+
+                totalOrgFinalMoney = totalOrgFinalMoney.setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+                totalOrgOverdue = totalOrgOverdue.setScale(
+                                2,
+                                RoundingMode.HALF_UP);
+
+                return new MonthlyHisabTableResponse(
+                                yearMonth.toString(),
+                                yearMonth.lengthOfMonth(),
+                                (int) employeePage.getTotalElements(),
+                                totalFull,
+                                totalHalf,
+                                totalEffectivePresenties,
+                                totalOrgEarnings,
+                                totalOrgAdvance,
+                                totalOrgFinalMoney,
+                                totalOrgOverdue,
+                                employeePage.getNumber(),
+                                employeePage.getSize(),
+                                employeePage.getTotalElements(),
+                                employeePage.getTotalPages(),
+                                employeePage.isFirst(),
+                                employeePage.isLast(),
+                                employeePage.hasNext(),
+                                employeePage.hasPrevious(),
+                                rows);
         }
 
-        // Overall organization month calculations
-        List<Attendance> allMonthAttendances = attendanceRepository.findByOwnerIdAndAttendanceDateBetween(ownerId, startDate, endDate);
-        int totalFull = (int) allMonthAttendances.stream().filter(a -> a.getStatus() == AttendanceStatus.PRESENT).count();
-        int totalHalf = (int) allMonthAttendances.stream().filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY).count();
-        double totalEffectivePresenties = totalFull + (0.5 * totalHalf);
+        @Override
+        @Transactional
+        public HisabResponse settleHisab(
+                        Long ownerId,
+                        SettleHisabRequest request) {
 
-        // Calculate total earnings across all eligible employees in this month using their month-effective rates
-        List<Employee> allEligibleEmployees = employeeRepository.findEligibleEmployees(ownerId, endDate);
-        Map<Long, List<Attendance>> allAttByEmp = allMonthAttendances.stream()
-                .collect(Collectors.groupingBy(a -> a.getEmployee().getId()));
+                Owner owner = ownerRepository.findById(ownerId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Owner tenant not found with ID: " + ownerId));
 
-        List<Long> allEmpIds = allEligibleEmployees.stream().map(Employee::getId).toList();
-        Map<Long, BigDecimal> allOrgEffectiveRates = new HashMap<>();
-        if (!allEmpIds.isEmpty()) {
-            List<EmployeeRateHistory> allRates = employeeRateHistoryRepository.findEffectiveRatesForEmployeesOnOrBefore(
-                    ownerId, allEmpIds, endDate
-            );
-            for (EmployeeRateHistory rh : allRates) {
-                allOrgEffectiveRates.putIfAbsent(rh.getEmployee().getId(), rh.getDailyRate().setScale(2, RoundingMode.HALF_UP));
-            }
+                Employee employee = employeeRepository.findByIdAndOwnerId(
+                                request.getEmployeeId(),
+                                ownerId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Employee not found with ID: "
+                                                                + request.getEmployeeId()));
+
+                if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+
+                        throw new BadRequestException(
+                                        "Cannot settle hisab for inactive/blocked employee: "
+                                                        + employee.getEmployeeName());
+                }
+
+                YearMonth ym;
+
+                try {
+                        ym = YearMonth.parse(request.getMonth().trim());
+                } catch (Exception e) {
+                        throw new BadRequestException(
+                                        "Invalid month format [" + request.getMonth()
+                                                        + "]. Expected format is YYYY-MM");
+                }
+
+                if (ym.atEndOfMonth().isBefore(employee.getJoiningDate())) {
+
+                        throw new BadRequestException(
+                                        "Cannot settle hisab before employee joining date ["
+                                                        + employee.getJoiningDate()
+                                                        + "]. Requested month: ["
+                                                        + request.getMonth()
+                                                        + "]");
+                }
+
+                if (hisabRepository.existsByOwnerIdAndEmployeeIdAndMonth(
+                                ownerId,
+                                employee.getId(),
+                                request.getMonth())) {
+
+                        throw new BadRequestException(
+                                        "Hisab already settled for employee ["
+                                                        + employee.getEmployeeName()
+                                                        + "] in month ["
+                                                        + request.getMonth()
+                                                        + "]");
+                }
+
+                LocalDate startDate = ym.atDay(1);
+                LocalDate endDate = ym.atEndOfMonth();
+
+                List<EmployeeRateHistory> rateList = employeeRateHistoryRepository.findEffectiveRatesOnOrBefore(
+                                ownerId,
+                                employee.getId(),
+                                endDate,
+                                PageRequest.of(0, 1));
+
+                BigDecimal effectiveRate = !rateList.isEmpty()
+                                ? rateList.get(0).getDailyRate().setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)
+                                : employee.getDailyRate().setScale(
+                                                2,
+                                                RoundingMode.HALF_UP);
+
+                List<Attendance> attendances = attendanceRepository
+                                .findByOwnerIdAndEmployeeIdAndAttendanceDateBetween(
+                                                ownerId,
+                                                employee.getId(),
+                                                startDate,
+                                                endDate);
+
+                int full = (int) attendances.stream()
+                                .filter(a -> a.getStatus() == AttendanceStatus.PRESENT)
+                                .count();
+
+                int half = (int) attendances.stream()
+                                .filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY)
+                                .count();
+
+                double effectiveDays = full + (0.5 * half);
+
+                BigDecimal earnings = effectiveRate
+                                .multiply(BigDecimal.valueOf(effectiveDays))
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                List<MonthlyHisab> priorList = hisabRepository.findPriorSettledHisab(
+                                ownerId,
+                                employee.getId(),
+                                request.getMonth().trim(),
+                                PageRequest.of(0, 1));
+
+                BigDecimal openingBalance = !priorList.isEmpty()
+                                ? priorList.get(0).getCarryForward()
+                                : BigDecimal.ZERO.setScale(
+                                                2,
+                                                RoundingMode.HALF_UP);
+
+                List<Advance> advances = advanceRepository
+                                .findByOwnerIdAndEmployeeIdAndAdvanceDateBetween(
+                                                ownerId,
+                                                employee.getId(),
+                                                startDate,
+                                                endDate);
+
+                BigDecimal monthAdvance = advances.stream()
+                                .map(Advance::getAmount)
+                                .reduce(
+                                                BigDecimal.ZERO,
+                                                BigDecimal::add)
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                Instant now = Instant.now();
+
+                for (Advance adv : advances) {
+                        adv.setSettled(true);
+                        adv.setSettledAt(now);
+                }
+
+                advanceRepository.saveAll(advances);
+
+                BigDecimal totalAdvance = monthAdvance
+                                .subtract(openingBalance)
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                BigDecimal finalMoney = earnings
+                                .subtract(totalAdvance)
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                BigDecimal settlementAmount = request.getSettlementAmount() != null
+                                ? request.getSettlementAmount().setScale(
+                                                2,
+                                                RoundingMode.HALF_UP)
+                                : finalMoney;
+
+                BigDecimal carryForward = finalMoney
+                                .subtract(settlementAmount)
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                MonthlyHisab hisab = new MonthlyHisab(
+                                owner,
+                                employee,
+                                request.getMonth(),
+                                effectiveRate,
+                                full,
+                                half,
+                                effectiveDays,
+                                openingBalance,
+                                earnings,
+                                totalAdvance,
+                                finalMoney,
+                                settlementAmount,
+                                carryForward,
+                                HisabStatus.SETTLED,
+                                request.getPaymentMode(),
+                                now,
+                                request.getNote());
+
+                MonthlyHisab saved = hisabRepository.save(hisab);
+
+                log.info(
+                                "Settled monthly hisab ID [{}] for employee [{}] "
+                                                + "in month [{}] with final money [{}], "
+                                                + "settlement amount [{}], carry forward [{}]",
+                                saved.getId(),
+                                employee.getId(),
+                                request.getMonth(),
+                                finalMoney,
+                                settlementAmount,
+                                carryForward);
+
+                return HisabResponse.fromEntity(saved);
         }
 
-        BigDecimal totalOrgEarnings = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        for (Employee e : allEligibleEmployees) {
-            BigDecimal empRate = allOrgEffectiveRates.getOrDefault(e.getId(), e.getDailyRate().setScale(2, RoundingMode.HALF_UP));
-            List<Attendance> atts = allAttByEmp.getOrDefault(e.getId(), Collections.emptyList());
-            long f = atts.stream().filter(a -> a.getStatus() == AttendanceStatus.PRESENT).count();
-            long h = atts.stream().filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY).count();
-            double eff = f + (0.5 * h);
-            BigDecimal empEarnings = empRate.multiply(BigDecimal.valueOf(eff)).setScale(2, RoundingMode.HALF_UP);
-            totalOrgEarnings = totalOrgEarnings.add(empEarnings);
+        @Override
+        @Transactional(readOnly = true)
+        public EmployeeHisabHistoryResponse getEmployeeHisabHistory(
+                        Long ownerId,
+                        Long employeeId,
+                        Pageable pageable) {
+
+                Employee employee = employeeRepository.findByIdAndOwnerId(
+                                employeeId,
+                                ownerId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Employee not found with ID: "
+                                                                + employeeId));
+
+                Pageable safePageable = sanitizePageable(
+                                pageable,
+                                Set.of("id", "month", "settledAt"),
+                                "month",
+                                Sort.Direction.DESC);
+
+                Page<MonthlyHisab> settlementsPage = hisabRepository.findEmployeeHisabHistory(
+                                ownerId,
+                                employeeId,
+                                safePageable);
+
+                BigDecimal runningAdvanceBalance = advanceRepository.sumRunningAdvanceByEmployee(
+                                ownerId,
+                                employeeId)
+                                .setScale(2, RoundingMode.HALF_UP);
+
+                Page<HisabResponse> responsePage = settlementsPage.map(HisabResponse::fromEntity);
+
+                return new EmployeeHisabHistoryResponse(
+                                employee.getId(),
+                                employee.getEmployeeName(),
+                                employee.getMobileNumber(),
+                                employee.getDailyRate(),
+                                employee.getJoiningDate(),
+                                runningAdvanceBalance,
+                                responsePage);
         }
 
-        BigDecimal rawTotalOrgAdvance = advanceRepository.sumAdvancesDisbursedBetween(ownerId, startDate, endDate);
-        BigDecimal totalOrgAdvance = rawTotalOrgAdvance != null
-                ? rawTotalOrgAdvance.setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        private Pageable sanitizePageable(
+                        Pageable pageable,
+                        Set<String> allowedProperties,
+                        String defaultSortProp,
+                        Sort.Direction defaultDirection) {
 
-        BigDecimal totalOrgFinalMoney = totalOrgEarnings.subtract(totalOrgAdvance).setScale(2, RoundingMode.HALF_UP);
+                if (pageable == null || pageable.isUnpaged()) {
 
-        return new MonthlyHisabTableResponse(
-                yearMonth.toString(),
-                yearMonth.lengthOfMonth(),
-                (int) employeePage.getTotalElements(),
-                totalFull,
-                totalHalf,
-                totalEffectivePresenties,
-                totalOrgEarnings,
-                totalOrgAdvance,
-                totalOrgFinalMoney,
-                employeePage.getNumber(),
-                employeePage.getSize(),
-                employeePage.getTotalElements(),
-                employeePage.getTotalPages(),
-                employeePage.isFirst(),
-                employeePage.isLast(),
-                employeePage.hasNext(),
-                employeePage.hasPrevious(),
-                rows
-        );
-    }
+                        return PageRequest.of(
+                                        0,
+                                        20,
+                                        Sort.by(defaultDirection, defaultSortProp));
+                }
 
-    @Override
-    @Transactional
-    public HisabResponse settleHisab(Long ownerId, SettleHisabRequest request) {
-        Owner owner = ownerRepository.findById(ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Owner tenant not found with ID: " + ownerId));
+                List<Sort.Order> validOrders = new ArrayList<>();
 
-        Employee employee = employeeRepository.findByIdAndOwnerId(request.getEmployeeId(), ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with ID: " + request.getEmployeeId()));
+                for (Sort.Order order : pageable.getSort()) {
 
-        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
-            throw new BadRequestException("Cannot settle hisab for inactive/blocked employee: " + employee.getEmployeeName());
+                        if (allowedProperties.contains(order.getProperty())) {
+                                validOrders.add(order);
+                        }
+                }
+
+                Sort cleanSort = validOrders.isEmpty()
+                                ? Sort.by(defaultDirection, defaultSortProp)
+                                : Sort.by(validOrders);
+
+                int pageNumber = Math.max(
+                                0,
+                                pageable.getPageNumber());
+
+                int pageSize = pageable.getPageSize() > 0
+                                && pageable.getPageSize() <= 100
+                                                ? pageable.getPageSize()
+                                                : 20;
+
+                return PageRequest.of(
+                                pageNumber,
+                                pageSize,
+                                cleanSort);
         }
-
-        YearMonth ym;
-        try {
-            ym = YearMonth.parse(request.getMonth().trim());
-        } catch (Exception e) {
-            throw new BadRequestException("Invalid month format [" + request.getMonth() + "]. Expected format is YYYY-MM");
-        }
-
-        if (ym.atEndOfMonth().isBefore(employee.getJoiningDate())) {
-            throw new BadRequestException("Cannot settle hisab before employee joining date [" +
-                    employee.getJoiningDate() + "]. Requested month: [" + request.getMonth() + "]");
-        }
-
-        if (hisabRepository.existsByOwnerIdAndEmployeeIdAndMonth(ownerId, employee.getId(), request.getMonth())) {
-            throw new BadRequestException("Hisab already settled for employee [" +
-                    employee.getEmployeeName() + "] in month [" + request.getMonth() + "]");
-        }
-
-        LocalDate startDate = ym.atDay(1);
-        LocalDate endDate = ym.atEndOfMonth();
-
-        // 1. Determine effective wage rate for the month and calculate attendance earnings
-        List<EmployeeRateHistory> rateList = employeeRateHistoryRepository.findEffectiveRatesOnOrBefore(
-                ownerId, employee.getId(), endDate, PageRequest.of(0, 1)
-        );
-        BigDecimal effectiveRate = !rateList.isEmpty()
-                ? rateList.get(0).getDailyRate().setScale(2, RoundingMode.HALF_UP)
-                : employee.getDailyRate().setScale(2, RoundingMode.HALF_UP);
-
-        List<Attendance> attendances = attendanceRepository.findByOwnerIdAndEmployeeIdAndAttendanceDateBetween(
-                ownerId, employee.getId(), startDate, endDate
-        );
-        int full = (int) attendances.stream().filter(a -> a.getStatus() == AttendanceStatus.PRESENT).count();
-        int half = (int) attendances.stream().filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY).count();
-        double effectiveDays = full + (0.5 * half);
-        BigDecimal earnings = effectiveRate.multiply(BigDecimal.valueOf(effectiveDays))
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // 2. Fetch opening advance balance from latest prior settled hisab
-        List<MonthlyHisab> priorList = hisabRepository.findPriorSettledHisab(
-                ownerId, employee.getId(), request.getMonth().trim(), PageRequest.of(0, 1)
-        );
-        BigDecimal openingBalance = !priorList.isEmpty()
-                ? priorList.get(0).getCarryForward()
-                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-
-        // 3. Calculate month advances and mark them as settled
-        List<Advance> advances = advanceRepository.findByOwnerIdAndEmployeeIdAndAdvanceDateBetween(
-                ownerId, employee.getId(), startDate, endDate
-        );
-        BigDecimal monthAdvance = advances.stream()
-                .map(Advance::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        Instant now = Instant.now();
-        for (Advance adv : advances) {
-            adv.setSettled(true);
-            adv.setSettledAt(now);
-        }
-        advanceRepository.saveAll(advances);
-
-        BigDecimal totalAdvance = monthAdvance.subtract(openingBalance).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal finalMoney = earnings.subtract(totalAdvance).setScale(2, RoundingMode.HALF_UP);
-
-        BigDecimal settlementAmount = request.getSettlementAmount() != null
-                ? request.getSettlementAmount().setScale(2, RoundingMode.HALF_UP)
-                : finalMoney;
-
-        BigDecimal carryForward = finalMoney.subtract(settlementAmount).setScale(2, RoundingMode.HALF_UP);
-
-        MonthlyHisab hisab = new MonthlyHisab(
-                owner,
-                employee,
-                request.getMonth(),
-                effectiveRate,
-                full,
-                half,
-                effectiveDays,
-                openingBalance,
-                earnings,
-                totalAdvance,
-                finalMoney,
-                settlementAmount,
-                carryForward,
-                HisabStatus.SETTLED,
-                request.getPaymentMode(),
-                now,
-                request.getNote()
-        );
-
-        MonthlyHisab saved = hisabRepository.save(hisab);
-        log.info("Settled monthly hisab ID [{}] for employee [{}] in month [{}] with final money [{}], settlement amount [{}], carry forward [{}]",
-                saved.getId(), employee.getId(), request.getMonth(), finalMoney, settlementAmount, carryForward);
-
-        return HisabResponse.fromEntity(saved);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public EmployeeHisabHistoryResponse getEmployeeHisabHistory(Long ownerId, Long employeeId, Pageable pageable) {
-        Employee employee = employeeRepository.findByIdAndOwnerId(employeeId, ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with ID: " + employeeId));
-
-        Pageable safePageable = sanitizePageable(pageable, Set.of("id", "month", "settledAt"), "month", Sort.Direction.DESC);
-        Page<MonthlyHisab> settlementsPage = hisabRepository.findEmployeeHisabHistory(ownerId, employeeId, safePageable);
-
-        BigDecimal runningAdvanceBalance = advanceRepository.sumRunningAdvanceByEmployee(ownerId, employeeId)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        Page<HisabResponse> responsePage = settlementsPage.map(HisabResponse::fromEntity);
-
-        return new EmployeeHisabHistoryResponse(
-                employee.getId(),
-                employee.getEmployeeName(),
-                employee.getMobileNumber(),
-                employee.getDailyRate(),
-                employee.getJoiningDate(),
-                runningAdvanceBalance,
-                responsePage
-        );
-    }
-
-    private Pageable sanitizePageable(Pageable pageable, Set<String> allowedProperties, String defaultSortProp, Sort.Direction defaultDirection) {
-        if (pageable == null || pageable.isUnpaged()) {
-            return PageRequest.of(0, 20, Sort.by(defaultDirection, defaultSortProp));
-        }
-
-        List<Sort.Order> validOrders = new ArrayList<>();
-        for (Sort.Order order : pageable.getSort()) {
-            if (allowedProperties.contains(order.getProperty())) {
-                validOrders.add(order);
-            }
-        }
-
-        Sort cleanSort = validOrders.isEmpty()
-                ? Sort.by(defaultDirection, defaultSortProp)
-                : Sort.by(validOrders);
-
-        int pageNumber = Math.max(0, pageable.getPageNumber());
-        int pageSize = pageable.getPageSize() > 0 && pageable.getPageSize() <= 100 ? pageable.getPageSize() : 20;
-
-        return PageRequest.of(pageNumber, pageSize, cleanSort);
-    }
 }
