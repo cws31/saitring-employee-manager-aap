@@ -32,6 +32,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 
 
-ENV JAVA_OPTS="-XX:+UseSerialGC -Xms64m -Xmx192m -XX:MaxMetaspaceSize=144m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+
+ENV JAVA_OPTS="-XX:+UseSerialGC -Xms12m -Xmx80m -XX:MaxMetaspaceSize=56m -XX:ReservedCodeCacheSize=12m -Xss256k -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
